@@ -32,31 +32,9 @@ enum InviteStatus {
   EXPIRED
 }
 
-enum NotificationType {
-  TASK_ASSIGNED
-  TASK_COMMENTED
-  TASK_STATUS
-  TASK_REMINDER
-  PROJECT_CREATED
-  INVITE_ACCEPTED
-}
-
 enum AgentMessageRole {
   USER
   ASSISTANT
-}
-
-enum AgentLinkedEntityType {
-  TASK
-  PROJECT
-  EQUIPMENT
-  SHOPPING_LIST
-  ZONE
-  CATEGORY
-  ANIMAL
-  PERSON
-  BUDGET_ENTRY
-  BUDGET_RECURRING_ENTRY
 }
 
 enum BudgetEntryType {
@@ -109,7 +87,6 @@ model User {
   createdBudgetEntries BudgetEntry[] @relation("BudgetEntryCreator")
   createdBudgetRecurringEntries BudgetRecurringEntry[] @relation("BudgetRecurringCreator")
   uploadedBudgetDocuments BudgetDocument[] @relation("BudgetDocumentUploader")
-  notifications Notification[]
 }
 
 model Account {
@@ -174,27 +151,6 @@ model House {
   budgetEntries BudgetEntry[]
   budgetRecurringEntries BudgetRecurringEntry[]
   budgetDocuments BudgetDocument[]
-  notifications Notification[]
-}
-
-model Notification {
-  id          String           @id @default(cuid())
-  userId      String
-  houseId     String
-  type        NotificationType
-  title       String
-  body        String?
-  linkUrl     String?
-  createdAt   DateTime         @default(now())
-  readAt      DateTime?
-  emailSentAt DateTime?
-  dedupeKey   String?          @unique
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
-
-  @@index([userId, readAt])
-  @@index([houseId, createdAt])
 }
 
 model HouseMember {
@@ -521,10 +477,9 @@ model AgentConversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  house    House                    @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  house    House          @relation(fields: [houseId], references: [id], onDelete: Cascade)
   messages AgentMessage[]
-  links    AgentConversationLink[]
 
   @@index([userId, updatedAt])
   @@index([houseId])
@@ -555,17 +510,4 @@ model AgentMessageAttachment {
   message AgentMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId, createdAt])
-}
-
-model AgentConversationLink {
-  id             String                @id @default(cuid())
-  conversationId String
-  entityType     AgentLinkedEntityType
-  entityId       String
-  createdAt      DateTime              @default(now())
-
-  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@index([entityType, entityId])
-  @@unique([conversationId, entityType, entityId])
 }

@@ -4,7 +4,7 @@ import path from "path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { generateConversationTitle, runAgentTurn } from "@/lib/agent/openai";
+import { runAgentTurn } from "@/lib/agent/openai";
 import { AgentApiError, requireAgentUserId } from "@/lib/agent/session";
 
 type RouteContext = {
@@ -311,7 +311,6 @@ export async function POST(request: Request, context: RouteContext) {
         context: {
           userId,
           houseId: conversation.houseId,
-          conversationId: conversation.id,
         },
       });
       assistantText = result.assistantText;
@@ -352,33 +351,6 @@ export async function POST(request: Request, context: RouteContext) {
         updatedAt: new Date(),
       },
     });
-
-    try {
-      const messageCount = await prisma.agentMessage.count({
-        where: { conversationId },
-      });
-      const shouldAutoTitle =
-        messageCount === 2 && conversation.title.startsWith("Conversation ");
-
-      if (shouldAutoTitle) {
-        const generatedTitle = await generateConversationTitle({
-          userMessage: incoming.message || "Nouvelle demande",
-          assistantMessage: assistantText,
-        });
-
-        if (generatedTitle) {
-          await conversationDelegate.update({
-            where: { id: conversationId },
-            data: {
-              title: generatedTitle,
-              updatedAt: new Date(),
-            },
-          });
-        }
-      }
-    } catch {
-      // ignore title generation failures
-    }
 
     return NextResponse.json({
       userMessage,

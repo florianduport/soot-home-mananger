@@ -102,9 +102,6 @@ export function AgentChat() {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [isMobileHistoryOpen, setIsMobileHistoryOpen] = useState(false);
   const [conversationSearch, setConversationSearch] = useState("");
-  const [deepLinkConversationId, setDeepLinkConversationId] = useState<string | null>(
-    null
-  );
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -148,22 +145,6 @@ export function AgentChat() {
   }, [isOpen, isMobileHistoryOpen]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const conversationId = params.get("agentConversationId");
-    if (!conversationId) return;
-
-    params.delete("agentConversationId");
-    const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${
-      window.location.hash
-    }`;
-    window.history.replaceState({}, "", nextUrl);
-
-    setDeepLinkConversationId(conversationId);
-    setIsOpen(true);
-  }, []);
-
-  useEffect(() => {
     if (!isOpen) return;
 
     void (async () => {
@@ -193,14 +174,6 @@ export function AgentChat() {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !deepLinkConversationId) return;
-    setActiveConversationId(deepLinkConversationId);
-    setIsMobileHistoryOpen(false);
-    void reloadConversations(deepLinkConversationId);
-    setDeepLinkConversationId(null);
-  }, [deepLinkConversationId, isOpen]);
-
-  useEffect(() => {
     if (!isOpen) {
       setIsMobileHistoryOpen(false);
       setConversationSearch("");
@@ -209,7 +182,7 @@ export function AgentChat() {
 
   useEffect(() => {
     if (!isOpen || !activeConversationId) {
-      if (!activeConversationId && !isSending) {
+      if (!activeConversationId) {
         setMessages([]);
       }
       return;
@@ -233,7 +206,7 @@ export function AgentChat() {
         setIsLoadingMessages(false);
       }
     })();
-  }, [activeConversationId, isOpen, isSending]);
+  }, [activeConversationId, isOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });

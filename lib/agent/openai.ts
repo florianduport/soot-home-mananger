@@ -25,11 +25,6 @@ type OpenAIResponseOutputItem = {
   content?: Array<{ type?: string; text?: string }>;
 };
 
-type ConversationTitleInput = {
-  userMessage: string;
-  assistantMessage: string;
-};
-
 function buildSystemPrompt(now: Date) {
   const isoDate = now.toISOString().slice(0, 10);
   const humanDate = new Intl.DateTimeFormat("fr-FR", {
@@ -188,44 +183,6 @@ async function toOpenAIInput(history: PersistedMessage[]) {
   }
 
   return items;
-}
-
-export async function generateConversationTitle({
-  userMessage,
-  assistantMessage,
-}: ConversationTitleInput) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
-
-  if (!apiKey || apiKey.startsWith("sk-test")) {
-    return null;
-  }
-
-  const prompt = [
-    "Génère un titre court (max 60 caractères) en français.",
-    "Retourne uniquement le titre, sans guillemets ni ponctuation finale.",
-  ].join("\n");
-
-  const responsePayload = await runResponsesRequest(
-    {
-      model,
-      input: [
-        { role: "system", content: prompt },
-        {
-          role: "user",
-          content: `Demande: ${userMessage}\nRéponse: ${assistantMessage}`,
-        },
-      ],
-    },
-    apiKey
-  );
-
-  const title = extractAssistantText(responsePayload)
-    .replace(/[\r\n]+/g, " ")
-    .trim();
-  if (!title) return null;
-
-  return title.length > 60 ? title.slice(0, 60).trim() : title;
 }
 
 export async function runAgentTurn({

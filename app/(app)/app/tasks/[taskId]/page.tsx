@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TaskDetailActionsMenu } from "@/components/tasks/task-detail-actions-menu";
 import { StatusToggle } from "@/components/tasks/status-toggle";
-import { buildConversationHref } from "@/lib/agent/conversation-links";
 import { requireSession } from "@/lib/house";
 import { prisma } from "@/lib/db";
 import { SendHorizontal } from "lucide-react";
@@ -113,23 +112,6 @@ export default async function TaskDetailPage({
   if (!membership) {
     redirect("/");
   }
-
-  const conversationLinks = await prisma.agentConversationLink.findMany({
-    where: {
-      entityType: "TASK",
-      entityId: task.id,
-    },
-    include: {
-      conversation: {
-        select: {
-          id: true,
-          title: true,
-          updatedAt: true,
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
 
   const [members, zones, categories, projects, equipments, animals, people] =
     await prisma.$transaction([
@@ -476,33 +458,6 @@ export default async function TaskDetailPage({
           <CardTitle>Commentaires</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {conversationLinks.length ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Conversations IA liées</p>
-              <ul className="space-y-2 text-sm">
-                {conversationLinks.map((link) => (
-                  <li
-                    key={link.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2"
-                  >
-                    <Link
-                      href={buildConversationHref({
-                        pathname: `/app/tasks/${task.id}`,
-                        searchParams: resolvedSearchParams,
-                        conversationId: link.conversation.id,
-                      })}
-                      className="font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      {link.conversation.title}
-                    </Link>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDateTime(link.conversation.updatedAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           <div className="space-y-4">
             {task.comments.length ? (
               task.comments.map((comment) => (

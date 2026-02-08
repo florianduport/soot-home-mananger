@@ -17,13 +17,6 @@ import { getBudgetRuntimeDelegates, withBudgetTablesGuard } from "@/lib/budget";
 import { prisma } from "@/lib/db";
 import { buildInviteUrl, hasEmailServerConfig, sendEmail } from "@/lib/email";
 import { buildImportantDateOccurrences } from "@/lib/important-dates";
-import {
-  notifyInviteAccepted,
-  notifyProjectCreated,
-  notifyTaskAssigned,
-  notifyTaskCommented,
-  notifyTaskStatusChanged,
-} from "@/lib/notifications";
 import { z } from "zod";
 
 const nameSchema = z
@@ -808,7 +801,6 @@ function revalidateApp() {
   revalidatePath("/app/budgets");
   revalidatePath("/app/shopping-lists");
   revalidatePath("/app/settings");
-  revalidatePath("/app/notifications");
 }
 
 export async function createHouse(formData: FormData) {
@@ -984,7 +976,7 @@ export async function createProject(formData: FormData) {
 
   await requireOwner(userId, houseId);
 
-  const project = await prisma.project.create({
+  await prisma.project.create({
     data: {
       houseId,
       name,
@@ -992,14 +984,6 @@ export async function createProject(formData: FormData) {
       startsAt,
       endsAt,
     },
-    select: { id: true, name: true },
-  });
-
-  await notifyProjectCreated({
-    houseId,
-    projectId: project.id,
-    projectName: project.name,
-    actorId: userId,
   });
 
   revalidateApp();
@@ -2050,16 +2034,6 @@ export async function createTask(formData: FormData) {
       },
     });
 
-    if (validAssigneeId) {
-      await notifyTaskAssigned({
-        houseId,
-        taskId: instance.id,
-        taskTitle: title,
-        assigneeId: validAssigneeId,
-        actorId: userId,
-      });
-    }
-
     await generateAndAttachTaskImage(instance.id, title, description);
   } else {
     const created = await prisma.task.create({
@@ -2083,16 +2057,6 @@ export async function createTask(formData: FormData) {
       },
     });
 
-    if (validAssigneeId) {
-      await notifyTaskAssigned({
-        houseId,
-        taskId: created.id,
-        taskTitle: title,
-        assigneeId: validAssigneeId,
-        actorId: userId,
-      });
-    }
-
     await generateAndAttachTaskImage(created.id, title, description);
   }
 
@@ -2107,13 +2071,7 @@ export async function updateTaskStatus(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: {
-      houseId: true,
-      status: true,
-      title: true,
-      createdById: true,
-      assigneeId: true,
-    },
+    select: { houseId: true },
   });
 
   if (!task) {
@@ -2127,24 +2085,6 @@ export async function updateTaskStatus(formData: FormData) {
     data: { status },
   });
 
-  if (task.status !== status && status === "DONE") {
-    const recipients = [task.createdById, task.assigneeId].filter(
-      (id): id is string => Boolean(id)
-    );
-    await Promise.all(
-      recipients.map((recipientId) =>
-        notifyTaskStatusChanged({
-          houseId: task.houseId,
-          taskId,
-          taskTitle: task.title,
-          recipientId,
-          actorId: userId,
-          status,
-        })
-      )
-    );
-  }
-
   revalidateApp();
 }
 
@@ -2155,7 +2095,7 @@ export async function updateTaskAssignee(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true, assigneeId: true, title: true },
+    select: { houseId: true },
   });
 
   if (!task) {
@@ -2180,16 +2120,6 @@ export async function updateTaskAssignee(formData: FormData) {
     data: { assigneeId },
   });
 
-  if (assigneeId && assigneeId !== task.assigneeId) {
-    await notifyTaskAssigned({
-      houseId: task.houseId,
-      taskId,
-      taskTitle: task.title,
-      assigneeId,
-      actorId: userId,
-    });
-  }
-
   revalidateApp();
 }
 
@@ -2208,7 +2138,6 @@ export async function updateTask(formData: FormData) {
       recurrenceUnit: true,
       recurrenceInterval: true,
       createdById: true,
-      assigneeId: true,
       parent: {
         select: {
           id: true,
@@ -2493,16 +2422,6 @@ export async function updateTask(formData: FormData) {
     });
   }
 
-  if (assigneeId && assigneeId !== task.assigneeId) {
-    await notifyTaskAssigned({
-      houseId: task.houseId,
-      taskId,
-      taskTitle: title,
-      assigneeId,
-      actorId: userId,
-    });
-  }
-
   revalidateApp();
   revalidatePath(`/app/tasks/${taskId}`);
 }
@@ -2543,7 +2462,7 @@ export async function addTaskComment(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true, title: true, createdById: true, assigneeId: true },
+    select: { houseId: true },
   });
 
   if (!task) {
@@ -2559,21 +2478,6 @@ export async function addTaskComment(formData: FormData) {
       content,
     },
   });
-
-  const recipients = [task.createdById, task.assigneeId].filter(
-    (id): id is string => Boolean(id)
-  );
-  await Promise.all(
-    recipients.map((recipientId) =>
-      notifyTaskCommented({
-        houseId: task.houseId,
-        taskId,
-        taskTitle: task.title,
-        recipientId,
-        actorId: userId,
-      })
-    )
-  );
 
   revalidateApp();
   revalidatePath(`/app/tasks/${taskId}`);
@@ -2764,20 +2668,11 @@ export async function applyTaskSuggestion(formData: FormData) {
 }
 
 export async function acceptHouseInvite(formData: FormData) {
-  const { id: userId, email, name } = await requireSessionUser();
+  const { id: userId, email } = await requireSessionUser();
   const token = z.string().min(10).parse(formData.get("token"));
 
   const invite = await prisma.houseInvite.findUnique({
     where: { token },
-    select: {
-      id: true,
-      houseId: true,
-      status: true,
-      expiresAt: true,
-      email: true,
-      role: true,
-      createdById: true,
-    },
   });
 
   if (!invite) {
@@ -2820,14 +2715,6 @@ export async function acceptHouseInvite(formData: FormData) {
       data: { status: "ACCEPTED", acceptedAt: new Date() },
     });
   });
-
-  if (invite.createdById) {
-    await notifyInviteAccepted({
-      houseId: invite.houseId,
-      inviterId: invite.createdById,
-      inviteeName: name,
-    });
-  }
 
   revalidateApp();
   redirect("/app");
@@ -3014,29 +2901,4 @@ export async function generateSuggestedTasks(formData: FormData) {
   }
 
   revalidateApp();
-}
-
-export async function markNotificationRead(formData: FormData) {
-  const userId = await requireUser();
-  const notificationId = z.string().cuid().parse(formData.get("notificationId"));
-
-  await prisma.notification.updateMany({
-    where: { id: notificationId, userId },
-    data: { readAt: new Date() },
-  });
-
-  revalidateApp();
-  revalidatePath("/app/notifications");
-}
-
-export async function markAllNotificationsRead() {
-  const userId = await requireUser();
-
-  await prisma.notification.updateMany({
-    where: { userId, readAt: null },
-    data: { readAt: new Date() },
-  });
-
-  revalidateApp();
-  revalidatePath("/app/notifications");
 }

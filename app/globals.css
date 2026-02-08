@@ -180,11 +180,3 @@
     opacity: 1;
   }
 }
-
-@media (max-width: 640px) {
-  input,
-  textarea,
-  select {
-    font-size: 16px;
-  }
-}

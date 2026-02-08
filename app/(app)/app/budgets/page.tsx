@@ -18,11 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { BudgetActionsMenu } from "@/components/budgets/budget-actions-menu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  buildConversationHref,
-  groupConversationLinks,
-} from "@/lib/agent/conversation-links";
-import { prisma } from "@/lib/db";
 
 type BudgetSearchParams = { [key: string]: string | string[] | undefined };
 
@@ -205,27 +200,6 @@ export default async function BudgetsPage({
     );
   }
 
-  const budgetEntryIds = budgetEntries.map((entry) => entry.id);
-  const budgetEntryLinks = budgetEntryIds.length
-    ? await prisma.agentConversationLink.findMany({
-        where: {
-          entityType: "BUDGET_ENTRY",
-          entityId: { in: budgetEntryIds },
-        },
-        include: {
-          conversation: {
-            select: {
-              id: true,
-              title: true,
-              updatedAt: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      })
-    : [];
-  const budgetEntryLinksById = groupConversationLinks(budgetEntryLinks);
-
   const monthlyItems: BudgetListItem[] = [
     ...budgetEntries.map((entry) => ({
       id: entry.id,
@@ -362,23 +336,6 @@ export default async function BudgetsPage({
                         {item.notes ? (
                           <p className="text-xs text-muted-foreground">{item.notes}</p>
                         ) : null}
-                        {item.persisted && budgetEntryLinksById.get(item.id)?.length ? (
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            {budgetEntryLinksById.get(item.id)?.map((link) => (
-                              <Link
-                                key={link.id}
-                                href={buildConversationHref({
-                                  pathname: "/app/budgets",
-                                  searchParams: resolvedSearchParams,
-                                  conversationId: link.conversation.id,
-                                })}
-                                className="text-primary underline-offset-4 hover:underline"
-                              >
-                                {link.conversation.title}
-                              </Link>
-                            ))}
-                          </div>
-                        ) : null}
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <p className="font-semibold text-rose-600">
@@ -434,23 +391,6 @@ export default async function BudgetsPage({
                         </div>
                         {item.notes ? (
                           <p className="text-xs text-muted-foreground">{item.notes}</p>
-                        ) : null}
-                        {item.persisted && budgetEntryLinksById.get(item.id)?.length ? (
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            {budgetEntryLinksById.get(item.id)?.map((link) => (
-                              <Link
-                                key={link.id}
-                                href={buildConversationHref({
-                                  pathname: "/app/budgets",
-                                  searchParams: resolvedSearchParams,
-                                  conversationId: link.conversation.id,
-                                })}
-                                className="text-primary underline-offset-4 hover:underline"
-                              >
-                                {link.conversation.title}
-                              </Link>
-                            ))}
-                          </div>
                         ) : null}
                       </div>
                       <div className="flex flex-col items-end gap-2">
