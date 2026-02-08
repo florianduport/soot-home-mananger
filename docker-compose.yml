@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16
+    container_name: homanager-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: homanager
+    ports:
+      - "5432:5432"
+    volumes:
+      - homanager_db:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+    container_name: homanager-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/homanager?schema=public
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3005}
+      NEXTAUTH_SECRET: dev-secret-change-me
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_IMAGE_MODEL: gpt-image-1
+      EMAIL_SERVER_HOST: ${EMAIL_SERVER_HOST:-}
+      EMAIL_SERVER_PORT: ${EMAIL_SERVER_PORT:-}
+      EMAIL_SERVER_USER: ${EMAIL_SERVER_USER:-}
+      EMAIL_SERVER_PASSWORD: ${EMAIL_SERVER_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@homanager.local}
+    ports:
+      - "3005:3005"
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: homanager-cloudflared
+    restart: unless-stopped
+    depends_on:
+      - app
+    command: tunnel --no-autoupdate run --url http://app:3005
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARED_TUNNEL_TOKEN:-}
+    profiles:
+      - cloudflared
+
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    container_name: homanager-cloudflared-quick
+    restart: unless-stopped
+    depends_on:
+      - app
+    command: tunnel --no-autoupdate --url http://app:3005
+    profiles:
+      - cloudflared-quick
+
+volumes:
+  homanager_db:

@@ -1,0 +1,513 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum HouseRole {
+  OWNER
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum RecurrenceUnit {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum BudgetEntryType {
+  INCOME
+  EXPENSE
+}
+
+enum BudgetEntrySource {
+  MANUAL
+  RECURRING
+  SHOPPING_LIST
+  DOCUMENT
+}
+
+enum BudgetDocumentType {
+  RECEIPT
+  INVOICE
+  QUOTE
+  OTHER
+}
+
+enum ImportantDateType {
+  BIRTHDAY
+  ANNIVERSARY
+  EVENT
+  OTHER
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+
+  memberships    HouseMember[]
+  createdHouses  House[]      @relation("HouseCreator")
+
+  createdTasks   Task[]       @relation("TaskCreator")
+  createdImportantDates ImportantDate[] @relation("ImportantDateCreator")
+  assignedTasks  Task[]       @relation("TaskAssignee")
+  comments       TaskComment[]
+  createdInvites HouseInvite[] @relation("InviteCreator")
+  agentConversations AgentConversation[]
+  createdBudgetEntries BudgetEntry[] @relation("BudgetEntryCreator")
+  createdBudgetRecurringEntries BudgetRecurringEntry[] @relation("BudgetRecurringCreator")
+  uploadedBudgetDocuments BudgetDocument[] @relation("BudgetDocumentUploader")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model House {
+  id          String        @id @default(cuid())
+  name        String
+  iconUrl     String?
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  createdBy   User          @relation("HouseCreator", fields: [createdById], references: [id])
+  members     HouseMember[]
+
+  tasks       Task[]
+  importantDates ImportantDate[]
+  taskSuggestions TaskSuggestion[]
+  projects    Project[]
+  zones       Zone[]
+  categories  Category[]
+  equipments  Equipment[]
+  animals     Animal[]
+  people      Person[]
+  shoppingLists ShoppingList[]
+  invites     HouseInvite[]
+  agentConversations AgentConversation[]
+  budgetEntries BudgetEntry[]
+  budgetRecurringEntries BudgetRecurringEntry[]
+  budgetDocuments BudgetDocument[]
+}
+
+model HouseMember {
+  id        String    @id @default(cuid())
+  houseId   String
+  userId    String
+  role      HouseRole @default(MEMBER)
+  createdAt DateTime  @default(now())
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([houseId, userId])
+}
+
+model HouseInvite {
+  id         String       @id @default(cuid())
+  houseId    String
+  email      String
+  role       HouseRole    @default(MEMBER)
+  token      String       @unique
+  status     InviteStatus @default(PENDING)
+  createdById String
+  createdAt  DateTime     @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  house     House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([houseId, status])
+  @@index([email])
+}
+
+model Zone {
+  id        String   @id @default(cuid())
+  houseId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks Task[]
+  taskSuggestions TaskSuggestion[]
+
+  @@unique([houseId, name])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  houseId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks Task[]
+  taskSuggestions TaskSuggestion[]
+
+  @@unique([houseId, name])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  houseId     String
+  name        String
+  description String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks Task[]
+  taskSuggestions TaskSuggestion[]
+}
+
+model Equipment {
+  id             String   @id @default(cuid())
+  houseId        String
+  name           String
+  location       String?
+  category       String?
+  purchasedAt    DateTime?
+  installedAt    DateTime?
+  lifespanMonths Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks Task[]
+  taskSuggestions TaskSuggestion[]
+}
+
+model Animal {
+  id        String   @id @default(cuid())
+  houseId   String
+  name      String
+  species   String?
+  birthDate DateTime?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks Task[]
+}
+
+model Person {
+  id           String   @id @default(cuid())
+  houseId      String
+  name         String
+  relation     String?
+  birthDate    DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks Task[]
+}
+
+model ShoppingList {
+  id        String   @id @default(cuid())
+  houseId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  items ShoppingListItem[]
+  budgetEntry BudgetEntry?
+
+  @@index([houseId])
+}
+
+model ShoppingListItem {
+  id             String   @id @default(cuid())
+  shoppingListId String
+  name           String
+  completed      Boolean  @default(false)
+  estimatedCostCents Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shoppingList ShoppingList @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  budgetEntry  BudgetEntry?
+
+  @@index([shoppingListId])
+}
+
+model BudgetRecurringEntry {
+  id          String          @id @default(cuid())
+  houseId     String
+  createdById String?
+  type        BudgetEntryType
+  label       String
+  amountCents Int
+  dayOfMonth  Int?
+  startMonth  DateTime
+  endMonth    DateTime?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  house      House         @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  createdBy  User?         @relation("BudgetRecurringCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  entries    BudgetEntry[]
+
+  @@index([houseId, type])
+  @@index([houseId, startMonth, endMonth])
+}
+
+model BudgetDocument {
+  id                 String             @id @default(cuid())
+  houseId            String
+  uploadedById       String?
+  name               String
+  mimeType           String
+  sizeBytes          Int
+  path               String
+  documentType       BudgetDocumentType @default(OTHER)
+  issuedOn           DateTime?
+  supplier           String?
+  extractedLabel     String?
+  extractedAmountCents Int?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  house      House         @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  uploadedBy User?         @relation("BudgetDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  entries    BudgetEntry[]
+
+  @@index([houseId, createdAt])
+}
+
+model BudgetEntry {
+  id               String            @id @default(cuid())
+  houseId          String
+  createdById      String?
+  recurringEntryId String?
+  shoppingListId   String?           @unique
+  shoppingListItemId String?        @unique
+  documentId       String?
+  type             BudgetEntryType
+  source           BudgetEntrySource @default(MANUAL)
+  label            String
+  amountCents      Int
+  occurredOn       DateTime
+  isForecast       Boolean           @default(false)
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  house             House               @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  createdBy         User?               @relation("BudgetEntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  recurringEntry    BudgetRecurringEntry? @relation(fields: [recurringEntryId], references: [id], onDelete: SetNull)
+  shoppingList      ShoppingList?      @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)
+  shoppingListItem  ShoppingListItem?   @relation(fields: [shoppingListItemId], references: [id], onDelete: SetNull)
+  document          BudgetDocument?     @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([houseId, occurredOn])
+  @@index([houseId, type, occurredOn])
+}
+
+model Task {
+  id                 String          @id @default(cuid())
+  houseId            String
+  title              String
+  description        String?
+  status             TaskStatus      @default(TODO)
+  dueDate            DateTime?
+  imageUrl           String?
+  isTemplate         Boolean         @default(false)
+  recurrenceUnit     RecurrenceUnit?
+  recurrenceInterval Int?
+  reminderOffsetDays Int?
+  createdById        String
+  assigneeId         String?
+  projectId          String?
+  zoneId             String?
+  categoryId         String?
+  equipmentId        String?
+  animalId           String?
+  personId           String?
+  parentId           String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  house      House      @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("TaskCreator", fields: [createdById], references: [id])
+  assignee   User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  project    Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  zone       Zone?      @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  category   Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  equipment  Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  animal     Animal?    @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  person     Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
+  parent     Task?      @relation("TaskParent", fields: [parentId], references: [id])
+  children   Task[]     @relation("TaskParent")
+
+  comments   TaskComment[]
+}
+
+model TaskSuggestion {
+  id                 String          @id @default(cuid())
+  houseId            String
+  title              String
+  description        String?
+  dueDate            DateTime?
+  recurrenceUnit     RecurrenceUnit?
+  recurrenceInterval Int?
+  reminderOffsetDays Int?
+  zoneId             String?
+  categoryId         String?
+  projectId          String?
+  equipmentId        String?
+  createdAt          DateTime        @default(now())
+
+  house      House      @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  zone       Zone?      @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  category   Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project    Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  equipment  Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+
+  @@index([houseId])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model ImportantDate {
+  id                String            @id @default(cuid())
+  houseId            String
+  createdById        String
+  title              String
+  description        String?
+  date               DateTime
+  type               ImportantDateType @default(OTHER)
+  isRecurringYearly  Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  house      House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  createdBy  User  @relation("ImportantDateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([houseId, date])
+  @@index([houseId, type])
+}
+
+model AgentConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  houseId   String
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  house    House          @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  messages AgentMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([houseId])
+}
+
+model AgentMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           AgentMessageRole
+  content        String
+  createdAt      DateTime         @default(now())
+
+  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  attachments  AgentMessageAttachment[]
+
+  @@index([conversationId, createdAt])
+}
+
+model AgentMessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  name      String
+  mimeType  String
+  sizeBytes Int
+  path      String
+  createdAt DateTime @default(now())
+
+  message AgentMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+}
