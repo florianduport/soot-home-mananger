@@ -1,9 +1,15 @@
 import { differenceInMonths, addMonths } from "date-fns";
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getHouseData, requireSession } from "@/lib/house";
+import {
+  buildConversationHref,
+  groupConversationLinks,
+} from "@/lib/agent/conversation-links";
+import { prisma } from "@/lib/db";
 import {
   createEquipment,
   deleteEquipment,
@@ -42,6 +48,26 @@ function computeLifespanSummary(
 export default async function EquipmentPage() {
   const session = await requireSession();
   const { houseId, equipments } = await getHouseData(session.user.id);
+  const equipmentIds = equipments.map((equipment) => equipment.id);
+  const equipmentLinks = equipmentIds.length
+    ? await prisma.agentConversationLink.findMany({
+        where: {
+          entityType: "EQUIPMENT",
+          entityId: { in: equipmentIds },
+        },
+        include: {
+          conversation: {
+            select: {
+              id: true,
+              title: true,
+              updatedAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const equipmentLinksById = groupConversationLinks(equipmentLinks);
 
   return (
     <>
@@ -190,6 +216,34 @@ export default async function EquipmentPage() {
                     Supprimer
                   </Button>
                 </form>
+                {equipmentLinksById.get(equipment.id)?.length ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Conversations IA liées
+                    </p>
+                    <ul className="space-y-2 text-sm">
+                      {equipmentLinksById.get(equipment.id)?.map((link) => (
+                        <li
+                          key={link.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2"
+                        >
+                          <Link
+                            href={buildConversationHref({
+                              pathname: "/app/equipment",
+                              conversationId: link.conversation.id,
+                            })}
+                            className="font-medium text-primary underline-offset-4 hover:underline"
+                          >
+                            {link.conversation.title}
+                          </Link>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(link.conversation.updatedAt)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           ))
