@@ -182,7 +182,7 @@ export function AgentChat() {
 
   useEffect(() => {
     if (!isOpen || !activeConversationId) {
-      if (!activeConversationId) {
+      if (!activeConversationId && !isSending) {
         setMessages([]);
       }
       return;
@@ -206,7 +206,7 @@ export function AgentChat() {
         setIsLoadingMessages(false);
       }
     })();
-  }, [activeConversationId, isOpen]);
+  }, [activeConversationId, isOpen, isSending]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
