@@ -1,7 +1,5 @@
-import {
-  addShoppingListItem,
-  createShoppingList,
-} from "@/app/actions";
+import Link from "next/link";
+import { addShoppingListItem, createShoppingList } from "@/app/actions";
 import { Plus } from "lucide-react";
 import {
   formatEuroFromCents,
@@ -17,6 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getHouseData, requireSession } from "@/lib/house";
+import {
+  buildConversationHref,
+  groupConversationLinks,
+} from "@/lib/agent/conversation-links";
+import { prisma } from "@/lib/db";
 
 function buildProgressLabel(
   total: number,
@@ -45,6 +48,26 @@ export default async function ShoppingListsPage() {
   const { houseId, shoppingLists, shoppingListsReady } = await getHouseData(
     session.user.id
   );
+  const shoppingListIds = shoppingLists.map((shoppingList) => shoppingList.id);
+  const shoppingListLinks = shoppingListIds.length
+    ? await prisma.agentConversationLink.findMany({
+        where: {
+          entityType: "SHOPPING_LIST",
+          entityId: { in: shoppingListIds },
+        },
+        include: {
+          conversation: {
+            select: {
+              id: true,
+              title: true,
+              updatedAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const shoppingListLinksById = groupConversationLinks(shoppingListLinks);
   const todayInput = toDateInputValue(new Date());
   const hasPendingEstimates = shoppingLists.some((shoppingList) =>
     shoppingList.items.some((item) => item.estimatedCostCents == null)
@@ -242,6 +265,36 @@ export default async function ShoppingListsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {shoppingListLinksById.get(shoppingList.id)?.length ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Conversations IA liées
+                      </p>
+                      <ul className="space-y-2 text-sm">
+                        {shoppingListLinksById.get(shoppingList.id)?.map((link) => (
+                          <li
+                            key={link.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2"
+                          >
+                            <Link
+                              href={buildConversationHref({
+                                pathname: "/app/shopping-lists",
+                                conversationId: link.conversation.id,
+                              })}
+                              className="font-medium text-primary underline-offset-4 hover:underline"
+                            >
+                              {link.conversation.title}
+                            </Link>
+                            <span className="text-xs text-muted-foreground">
+                              {new Intl.DateTimeFormat("fr-FR", {
+                                dateStyle: "medium",
+                              }).format(link.conversation.updatedAt)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {shoppingList.items.length ? (
                     <div className="space-y-3">
                       {shoppingList.items.map((item) => (
