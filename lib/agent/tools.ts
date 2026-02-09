@@ -1,6 +1,7 @@
 import {
   BudgetEntrySource,
   BudgetEntryType,
+  Prisma,
   RecurrenceUnit,
   TaskStatus,
 } from "@prisma/client";
@@ -13,6 +14,7 @@ import { getNextImportantDateOccurrence } from "@/lib/important-dates";
 export type AgentToolContext = {
   userId: string;
   houseId: string;
+  conversationId: string;
 };
 
 type OpenAIFunctionTool = {
@@ -221,6 +223,52 @@ function revalidateAppPaths() {
   revalidatePath("/app/projects");
   revalidatePath("/app/equipment");
   revalidatePath("/app/settings");
+}
+
+function isConversationLinkTableUnavailableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
+async function linkConversationToEntity(
+  context: AgentToolContext,
+  entityType:
+    | "TASK"
+    | "PROJECT"
+    | "EQUIPMENT"
+    | "SHOPPING_LIST"
+    | "ZONE"
+    | "CATEGORY"
+    | "ANIMAL"
+    | "PERSON"
+    | "BUDGET_ENTRY"
+    | "BUDGET_RECURRING_ENTRY",
+  entityId: string
+) {
+  try {
+    await prisma.agentConversationLink.upsert({
+      where: {
+        conversationId_entityType_entityId: {
+          conversationId: context.conversationId,
+          entityType,
+          entityId,
+        },
+      },
+      create: {
+        conversationId: context.conversationId,
+        entityType,
+        entityId,
+      },
+      update: {},
+    });
+  } catch (error) {
+    if (isConversationLinkTableUnavailableError(error)) {
+      return;
+    }
+    throw error;
+  }
 }
 
 async function resolveRelationIdByName(
@@ -601,7 +649,10 @@ async function toolListTasks(args: unknown, { houseId }: AgentToolContext) {
   });
 }
 
-async function toolCreateTask(args: unknown, { userId, houseId }: AgentToolContext) {
+async function toolCreateTask(
+  args: unknown,
+  { userId, houseId, conversationId }: AgentToolContext
+) {
   const parsed = createTaskArgsSchema.parse(args ?? {});
 
   const [zoneId, categoryId, projectId, equipmentId, animalId, personId, assigneeId] =
@@ -667,6 +718,11 @@ async function toolCreateTask(args: unknown, { userId, houseId }: AgentToolConte
       },
     });
 
+    await linkConversationToEntity(
+      { userId, houseId, conversationId },
+      "TASK",
+      instance.id
+    );
     revalidateAppPaths();
 
     return asToolResult({
@@ -708,6 +764,11 @@ async function toolCreateTask(args: unknown, { userId, houseId }: AgentToolConte
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "TASK",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -722,7 +783,10 @@ async function toolCreateTask(args: unknown, { userId, houseId }: AgentToolConte
   });
 }
 
-async function toolUpdateTaskStatus(args: unknown, { houseId }: AgentToolContext) {
+async function toolUpdateTaskStatus(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = updateTaskStatusArgsSchema.parse(args ?? {});
   const task = await findTaskByIdOrTitle(houseId, parsed.taskId, parsed.taskTitle);
 
@@ -735,6 +799,11 @@ async function toolUpdateTaskStatus(args: unknown, { houseId }: AgentToolContext
     data: { status: parsed.status as TaskStatus },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "TASK",
+    task.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -769,7 +838,10 @@ async function toolDeleteTask(args: unknown, { houseId }: AgentToolContext) {
   });
 }
 
-async function toolCreateProject(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreateProject(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = createProjectArgsSchema.parse(args ?? {});
 
   const created = await prisma.project.create({
@@ -786,6 +858,11 @@ async function toolCreateProject(args: unknown, { houseId }: AgentToolContext) {
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "PROJECT",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -795,7 +872,10 @@ async function toolCreateProject(args: unknown, { houseId }: AgentToolContext) {
   });
 }
 
-async function toolCreateEquipment(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreateEquipment(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = createEquipmentArgsSchema.parse(args ?? {});
 
   const created = await prisma.equipment.create({
@@ -814,6 +894,11 @@ async function toolCreateEquipment(args: unknown, { houseId }: AgentToolContext)
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "EQUIPMENT",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -823,7 +908,10 @@ async function toolCreateEquipment(args: unknown, { houseId }: AgentToolContext)
   });
 }
 
-async function toolCreateShoppingList(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreateShoppingList(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = createShoppingListArgsSchema.parse(args ?? {});
 
   const created = await prisma.shoppingList.create({
@@ -837,6 +925,11 @@ async function toolCreateShoppingList(args: unknown, { houseId }: AgentToolConte
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "SHOPPING_LIST",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -846,7 +939,10 @@ async function toolCreateShoppingList(args: unknown, { houseId }: AgentToolConte
   });
 }
 
-async function toolAddShoppingItem(args: unknown, { houseId }: AgentToolContext) {
+async function toolAddShoppingItem(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = addShoppingItemArgsSchema.parse(args ?? {});
 
   const shoppingList = parsed.shoppingListId
@@ -891,6 +987,11 @@ async function toolAddShoppingItem(args: unknown, { houseId }: AgentToolContext)
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "SHOPPING_LIST",
+    shoppingList.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -906,7 +1007,7 @@ async function toolAddShoppingItem(args: unknown, { houseId }: AgentToolContext)
 
 async function toolCreateBudgetEntry(
   args: unknown,
-  { userId, houseId }: AgentToolContext
+  { userId, houseId, conversationId }: AgentToolContext
 ) {
   ensureBudgetFeatureAvailable();
   const parsed = createBudgetEntryArgsSchema.parse(args ?? {});
@@ -936,6 +1037,11 @@ async function toolCreateBudgetEntry(
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "BUDGET_ENTRY",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -954,7 +1060,7 @@ async function toolCreateBudgetEntry(
 
 async function toolCreateBudgetRecurringEntry(
   args: unknown,
-  { userId, houseId }: AgentToolContext
+  { userId, houseId, conversationId }: AgentToolContext
 ) {
   ensureBudgetFeatureAvailable();
   const parsed = createBudgetRecurringEntryArgsSchema.parse(args ?? {});
@@ -991,6 +1097,11 @@ async function toolCreateBudgetRecurringEntry(
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "BUDGET_RECURRING_ENTRY",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -1120,7 +1231,10 @@ async function toolListMonthlyBudget(args: unknown, { houseId }: AgentToolContex
   });
 }
 
-async function toolCreateZone(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreateZone(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = simpleNameSchema.parse(args ?? {});
   const created = await prisma.zone.create({
     data: {
@@ -1133,6 +1247,11 @@ async function toolCreateZone(args: unknown, { houseId }: AgentToolContext) {
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "ZONE",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -1142,7 +1261,10 @@ async function toolCreateZone(args: unknown, { houseId }: AgentToolContext) {
   });
 }
 
-async function toolCreateCategory(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreateCategory(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = simpleNameSchema.parse(args ?? {});
   const created = await prisma.category.create({
     data: {
@@ -1155,6 +1277,11 @@ async function toolCreateCategory(args: unknown, { houseId }: AgentToolContext) 
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "CATEGORY",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -1164,7 +1291,10 @@ async function toolCreateCategory(args: unknown, { houseId }: AgentToolContext) 
   });
 }
 
-async function toolCreateAnimal(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreateAnimal(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = createAnimalArgsSchema.parse(args ?? {});
   const created = await prisma.animal.create({
     data: {
@@ -1179,6 +1309,11 @@ async function toolCreateAnimal(args: unknown, { houseId }: AgentToolContext) {
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "ANIMAL",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({
@@ -1188,7 +1323,10 @@ async function toolCreateAnimal(args: unknown, { houseId }: AgentToolContext) {
   });
 }
 
-async function toolCreatePerson(args: unknown, { houseId }: AgentToolContext) {
+async function toolCreatePerson(
+  args: unknown,
+  { houseId, userId, conversationId }: AgentToolContext
+) {
   const parsed = createPersonArgsSchema.parse(args ?? {});
   const created = await prisma.person.create({
     data: {
@@ -1203,6 +1341,11 @@ async function toolCreatePerson(args: unknown, { houseId }: AgentToolContext) {
     },
   });
 
+  await linkConversationToEntity(
+    { userId, houseId, conversationId },
+    "PERSON",
+    created.id
+  );
   revalidateAppPaths();
 
   return asToolResult({

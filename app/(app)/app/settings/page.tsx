@@ -26,6 +26,11 @@ import { getHouseData, requireSession } from "@/lib/house";
 import { getNextImportantDateOccurrence } from "@/lib/important-dates";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { HouseIconUpload } from "@/components/houses/house-icon-upload";
+import {
+  buildConversationHref,
+  groupConversationLinks,
+} from "@/lib/agent/conversation-links";
+import { prisma } from "@/lib/db";
 
 const statusLabels: Record<string, string> = {
   PENDING: "En attente",
@@ -67,6 +72,88 @@ export default async function SettingsPage() {
     await getHouseData(session.user.id);
   const houseIconUrl = membership.house.iconUrl;
   const canEditHouse = membership.role === "OWNER";
+  const zoneIds = zones.map((zone) => zone.id);
+  const categoryIds = categories.map((category) => category.id);
+  const animalIds = animals.map((animal) => animal.id);
+  const personIds = people.map((person) => person.id);
+  const [zoneLinks, categoryLinks, animalLinks, personLinks] = await Promise.all([
+    zoneIds.length
+      ? prisma.agentConversationLink.findMany({
+          where: {
+            entityType: "ZONE",
+            entityId: { in: zoneIds },
+          },
+          include: {
+            conversation: {
+              select: {
+                id: true,
+                title: true,
+                updatedAt: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+    categoryIds.length
+      ? prisma.agentConversationLink.findMany({
+          where: {
+            entityType: "CATEGORY",
+            entityId: { in: categoryIds },
+          },
+          include: {
+            conversation: {
+              select: {
+                id: true,
+                title: true,
+                updatedAt: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+    animalIds.length
+      ? prisma.agentConversationLink.findMany({
+          where: {
+            entityType: "ANIMAL",
+            entityId: { in: animalIds },
+          },
+          include: {
+            conversation: {
+              select: {
+                id: true,
+                title: true,
+                updatedAt: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+    personIds.length
+      ? prisma.agentConversationLink.findMany({
+          where: {
+            entityType: "PERSON",
+            entityId: { in: personIds },
+          },
+          include: {
+            conversation: {
+              select: {
+                id: true,
+                title: true,
+                updatedAt: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+  ]);
+  const zoneLinksById = groupConversationLinks(zoneLinks);
+  const categoryLinksById = groupConversationLinks(categoryLinks);
+  const animalLinksById = groupConversationLinks(animalLinks);
+  const personLinksById = groupConversationLinks(personLinks);
   const sortedImportantDates = [...importantDates].sort((a, b) => {
     const aNext = getNextImportantDateOccurrence(a.date, a.isRecurringYearly);
     const bNext = getNextImportantDateOccurrence(b.date, b.isRecurringYearly);
@@ -223,26 +310,44 @@ export default async function SettingsPage() {
             <div className="space-y-2 text-sm">
               {zones.map((zone) => (
                 <div key={zone.id} className="flex flex-wrap items-stretch gap-2 sm:items-center">
-                  <form
-                    action={updateZone}
-                    className="flex w-full flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap"
-                  >
-                    <input type="hidden" name="zoneId" value={zone.id} />
-                    <Input
-                      name="name"
-                      defaultValue={zone.name}
-                      className="w-full sm:flex-1"
-                      required
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
+                  <div className="flex w-full flex-col gap-2 sm:flex-1">
+                    <form
+                      action={updateZone}
+                      className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap"
                     >
-                      Modifier
-                    </Button>
-                  </form>
+                      <input type="hidden" name="zoneId" value={zone.id} />
+                      <Input
+                        name="name"
+                        defaultValue={zone.name}
+                        className="w-full sm:flex-1"
+                        required
+                      />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                      >
+                        Modifier
+                      </Button>
+                    </form>
+                    {zoneLinksById.get(zone.id)?.length ? (
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {zoneLinksById.get(zone.id)?.map((link) => (
+                          <Link
+                            key={link.id}
+                            href={buildConversationHref({
+                              pathname: "/app/settings",
+                              conversationId: link.conversation.id,
+                            })}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {link.conversation.title}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   <form action={deleteZone}>
                     <input type="hidden" name="zoneId" value={zone.id} />
                     <Button
@@ -283,26 +388,44 @@ export default async function SettingsPage() {
                   key={category.id}
                   className="flex flex-wrap items-stretch gap-2 sm:items-center"
                 >
-                  <form
-                    action={updateCategory}
-                    className="flex w-full flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap"
-                  >
-                    <input type="hidden" name="categoryId" value={category.id} />
-                    <Input
-                      name="name"
-                      defaultValue={category.name}
-                      className="w-full sm:flex-1"
-                      required
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
+                  <div className="flex w-full flex-col gap-2 sm:flex-1">
+                    <form
+                      action={updateCategory}
+                      className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap"
                     >
-                      Modifier
-                    </Button>
-                  </form>
+                      <input type="hidden" name="categoryId" value={category.id} />
+                      <Input
+                        name="name"
+                        defaultValue={category.name}
+                        className="w-full sm:flex-1"
+                        required
+                      />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                      >
+                        Modifier
+                      </Button>
+                    </form>
+                    {categoryLinksById.get(category.id)?.length ? (
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {categoryLinksById.get(category.id)?.map((link) => (
+                          <Link
+                            key={link.id}
+                            href={buildConversationHref({
+                              pathname: "/app/settings",
+                              conversationId: link.conversation.id,
+                            })}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {link.conversation.title}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   <form action={deleteCategory}>
                     <input type="hidden" name="categoryId" value={category.id} />
                     <Button
@@ -336,22 +459,40 @@ export default async function SettingsPage() {
             <div className="space-y-2 text-sm">
               {animals.map((animal) => (
                 <div key={animal.id} className="flex flex-wrap items-stretch gap-2 sm:items-center">
-                  <form
-                    action={updateAnimal}
-                    className="grid w-full gap-2 sm:flex-1 sm:grid-cols-[1.2fr,1fr,auto]"
-                  >
-                    <input type="hidden" name="animalId" value={animal.id} />
-                    <Input name="name" defaultValue={animal.name} required />
-                    <Input name="species" defaultValue={animal.species ?? ""} />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
+                  <div className="flex w-full flex-col gap-2 sm:flex-1">
+                    <form
+                      action={updateAnimal}
+                      className="grid w-full gap-2 sm:grid-cols-[1.2fr,1fr,auto]"
                     >
-                      Modifier
-                    </Button>
-                  </form>
+                      <input type="hidden" name="animalId" value={animal.id} />
+                      <Input name="name" defaultValue={animal.name} required />
+                      <Input name="species" defaultValue={animal.species ?? ""} />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                      >
+                        Modifier
+                      </Button>
+                    </form>
+                    {animalLinksById.get(animal.id)?.length ? (
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {animalLinksById.get(animal.id)?.map((link) => (
+                          <Link
+                            key={link.id}
+                            href={buildConversationHref({
+                              pathname: "/app/settings",
+                              conversationId: link.conversation.id,
+                            })}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {link.conversation.title}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   <form action={deleteAnimal}>
                     <input type="hidden" name="animalId" value={animal.id} />
                     <Button
@@ -385,25 +526,43 @@ export default async function SettingsPage() {
             <div className="space-y-2 text-sm">
               {people.map((person) => (
                 <div key={person.id} className="flex flex-wrap items-stretch gap-2 sm:items-center">
-                  <form
-                    action={updatePerson}
-                    className="grid w-full gap-2 sm:flex-1 sm:grid-cols-[1.2fr,1fr,auto]"
-                  >
-                    <input type="hidden" name="personId" value={person.id} />
-                    <Input name="name" defaultValue={person.name} required />
-                    <Input
-                      name="relation"
-                      defaultValue={person.relation ?? ""}
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
+                  <div className="flex w-full flex-col gap-2 sm:flex-1">
+                    <form
+                      action={updatePerson}
+                      className="grid w-full gap-2 sm:grid-cols-[1.2fr,1fr,auto]"
                     >
-                      Modifier
-                    </Button>
-                  </form>
+                      <input type="hidden" name="personId" value={person.id} />
+                      <Input name="name" defaultValue={person.name} required />
+                      <Input
+                        name="relation"
+                        defaultValue={person.relation ?? ""}
+                      />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                      >
+                        Modifier
+                      </Button>
+                    </form>
+                    {personLinksById.get(person.id)?.length ? (
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {personLinksById.get(person.id)?.map((link) => (
+                          <Link
+                            key={link.id}
+                            href={buildConversationHref({
+                              pathname: "/app/settings",
+                              conversationId: link.conversation.id,
+                            })}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {link.conversation.title}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   <form action={deletePerson}>
                     <input type="hidden" name="personId" value={person.id} />
                     <Button
