@@ -8,6 +8,7 @@ import {
   Hammer,
   Home,
   Landmark,
+  Bell,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -19,6 +20,7 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 
 const primaryNav = [
   { href: "/app", label: "Vue globale", icon: Home },
+  { href: "/app/notifications", label: "Notifications", icon: Bell },
   { href: "/app/tasks", label: "Tâches", icon: CheckSquare2 },
   { href: "/app/calendar", label: "Calendrier", icon: CalendarDays },
   { href: "/app/budgets", label: "Budgets", icon: Landmark },
@@ -34,6 +36,7 @@ export function Sidebar({
   houseIconUrl,
   userName,
   userEmail,
+  unreadNotifications = 0,
   collapsed = false,
   onToggle,
   mobile = false,
@@ -44,6 +47,7 @@ export function Sidebar({
   houseIconUrl?: string | null;
   userName?: string | null;
   userEmail?: string | null;
+  unreadNotifications?: number;
   collapsed?: boolean;
   onToggle?: () => void;
   mobile?: boolean;
@@ -129,6 +133,8 @@ export function Sidebar({
             {primaryNav.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
+              const showBadge =
+                item.href === "/app/notifications" && unreadNotifications > 0;
               return (
                 <Link
                   key={item.href}
@@ -143,7 +149,14 @@ export function Sidebar({
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   {!isCollapsed ? (
-                    <span className="truncate">{item.label}</span>
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                      <span className="truncate">{item.label}</span>
+                      {showBadge ? (
+                        <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-semibold text-white">
+                          {unreadNotifications}
+                        </span>
+                      ) : null}
+                    </span>
                   ) : null}
                 </Link>
               );

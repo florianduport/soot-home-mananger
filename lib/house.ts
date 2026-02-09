@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/db";
 import { ensureRecurringTasks } from "@/lib/recurrence";
+import { ensureTaskReminders } from "@/lib/notifications";
 
 type ShoppingListWithItems = Prisma.ShoppingListGetPayload<{
   include: { items: true };
@@ -82,6 +83,7 @@ export async function getHouseData(userId: string) {
   const houseId = membership.houseId;
 
   await ensureRecurringTasks(houseId);
+  await ensureTaskReminders(houseId);
 
   let shoppingListsReady = true;
   let shoppingLists: ShoppingListWithItems[] = [];
