@@ -10,12 +10,14 @@ export function AppShell({
   houseIconUrl,
   userName,
   userEmail,
+  unreadNotifications,
   children,
 }: {
   houseName: string;
   houseIconUrl?: string | null;
   userName?: string | null;
   userEmail?: string | null;
+  unreadNotifications?: number;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -89,6 +91,7 @@ export function AppShell({
           houseIconUrl={houseIconUrl}
           userName={userName}
           userEmail={userEmail}
+          unreadNotifications={unreadNotifications}
           collapsed={collapsed}
           onToggle={toggle}
         />
@@ -137,6 +140,7 @@ export function AppShell({
         houseIconUrl={houseIconUrl}
         userName={userName}
         userEmail={userEmail}
+        unreadNotifications={unreadNotifications}
         collapsed={false}
         mobile
         isOpen={mobileMenuOpen}
