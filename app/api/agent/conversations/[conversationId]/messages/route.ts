@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runAgentTurn } from "@/lib/agent/openai";
+import {
+  enqueueConversationRetitleJob,
+  isDefaultConversationTitle,
+} from "@/lib/agent/conversation-title";
 import { AgentApiError, requireAgentUserId } from "@/lib/agent/session";
 
 type RouteContext = {
@@ -34,6 +38,7 @@ function getAgentDelegates() {
       id: string;
       houseId: string;
       title: string;
+      _count: { messages: number };
     } | null>;
     update: (args: unknown) => Promise<unknown>;
   };
@@ -231,6 +236,11 @@ export async function POST(request: Request, context: RouteContext) {
         id: true,
         houseId: true,
         title: true,
+        _count: {
+          select: {
+            messages: true,
+          },
+        },
       },
     });
 
@@ -276,6 +286,19 @@ export async function POST(request: Request, context: RouteContext) {
         },
       },
     });
+
+    if (
+      conversation._count.messages === 0 &&
+      isDefaultConversationTitle(conversation.title)
+    ) {
+      enqueueConversationRetitleJob({
+        conversationId,
+        userId,
+        currentTitle: conversation.title,
+        message: incoming.message,
+        attachmentNames: persistedAttachments.map((item) => item.name),
+      });
+    }
 
     await conversationDelegate.update({
       where: { id: conversationId },

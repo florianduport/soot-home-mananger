@@ -13,6 +13,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import { IllustrationPlaceholder } from "@/components/ui/illustration-placeholder";
 
 export type CalendarTask = {
   id: string;
@@ -21,6 +22,7 @@ export type CalendarTask = {
   kind?: "task" | "reminder" | "important_date";
   parentId?: string;
   imageUrl?: string | null;
+  isImageGenerating?: boolean;
   zoneId?: string | null;
   categoryId?: string | null;
   assigneeId?: string | null;
@@ -84,14 +86,14 @@ export function CalendarView({
   }
 
   return (
-    <div className="rounded-2xl border bg-card text-foreground shadow-sm">
+    <div className="rounded-2xl border bg-card/84 text-card-foreground shadow-sm backdrop-blur-md">
       <div className="border-b border-border px-4 py-4 sm:px-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
               Calendrier
             </p>
-            <h3 className="text-base font-semibold sm:text-lg">
+            <h3 className="text-lg font-semibold sm:text-xl">
               Calendrier global
             </h3>
           </div>
@@ -100,7 +102,7 @@ export function CalendarView({
         <div className="mt-3 flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           <button
             type="button"
-            className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-widest text-muted-foreground hover:bg-muted"
+            className="rounded-full border border-border px-3 py-1.5 text-sm uppercase tracking-wide text-muted-foreground hover:bg-muted"
             onClick={() => {
               const now = new Date();
               setCurrentDate(now);
@@ -121,7 +123,7 @@ export function CalendarView({
           >
             ‹
           </button>
-          <div className="min-w-0 flex-1 text-center text-sm font-medium text-foreground sm:min-w-[160px] sm:flex-none">
+          <div className="min-w-0 flex-1 text-center text-base font-medium text-foreground sm:min-w-[190px] sm:flex-none">
             {view === "week"
               ? `${format(weekStart, "d MMM")} - ${format(weekEnd, "d MMM yyyy")}`
               : format(monthStart, "MMMM yyyy")}
@@ -144,7 +146,7 @@ export function CalendarView({
 
       <div className="overflow-x-auto pb-1">
         <div className="min-w-[700px]">
-          <div className="grid grid-cols-7 border-b border-border text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          <div className="grid grid-cols-7 border-b border-border text-sm uppercase tracking-[0.12em] text-muted-foreground">
             {weekdayLabels.map((label) => (
               <div key={label} className="px-3 py-2 text-center">
                 {label}
@@ -165,22 +167,22 @@ export function CalendarView({
               return (
                 <div
                   key={key}
-                  className={`min-h-[108px] bg-card p-2 sm:min-h-[120px] ${
+                  className={`min-h-[124px] bg-card p-2.5 sm:min-h-[138px] ${
                     isCurrentMonth ? "opacity-100" : "opacity-40"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-semibold ${
+                      className={`text-sm font-semibold ${
                         isTodayDate
-                          ? "flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background"
+                          ? "flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background"
                           : "text-muted-foreground"
                       }`}
                     >
                       {format(day, "d")}
                     </span>
                     {dayTasks.length ? (
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-xs text-slate-500">
                         {dayTasks.length} éléments
                       </span>
                     ) : null}
@@ -192,7 +194,7 @@ export function CalendarView({
                         (task.kind === "important_date"
                           ? "/app/settings"
                           : `/app/tasks/${task.parentId ?? task.id}`);
-                      const className = `block truncate rounded-md border px-2 py-1 text-[10px] font-medium transition hover:opacity-80 sm:text-[11px] ${
+                      const className = `block truncate rounded-md border px-2 py-1.5 text-xs font-medium transition hover:opacity-80 sm:text-sm ${
                         task.kind === "important_date"
                           ? "border-amber-200 bg-amber-50 text-amber-900"
                           : task.kind === "reminder"
@@ -202,7 +204,12 @@ export function CalendarView({
 
                       const content = (
                         <span className="flex items-center gap-2">
-                          {task.imageUrl ? (
+                          {task.isImageGenerating ? (
+                            <IllustrationPlaceholder
+                              className="h-6 w-6 rounded-md"
+                              showLabel={false}
+                            />
+                          ) : task.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={task.imageUrl}
@@ -233,7 +240,7 @@ export function CalendarView({
                       );
                     })}
                     {extraCount > 0 ? (
-                      <div className="text-[10px] text-slate-400">
+                      <div className="text-xs text-slate-500">
                         +{extraCount} autres
                       </div>
                     ) : null}

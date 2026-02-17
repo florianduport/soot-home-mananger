@@ -10,19 +10,37 @@ import {
   Prisma,
 } from "@prisma/client";
 import { randomBytes } from "crypto";
-import { mkdir, unlink, writeFile } from "fs/promises";
+import { access, mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { authOptions } from "@/auth";
 import { getBudgetRuntimeDelegates, withBudgetTablesGuard } from "@/lib/budget";
 import { prisma } from "@/lib/db";
+import {
+  clearEquipmentImageGenerating,
+  removeStoredEquipmentImageVariants,
+} from "@/lib/equipment-images";
 import { buildInviteUrl, hasEmailServerConfig, sendEmail } from "@/lib/email";
 import { buildImportantDateOccurrences } from "@/lib/important-dates";
+import {
+  enqueueEquipmentIllustration,
+  enqueueProjectIllustration,
+  enqueueTaskIllustration,
+} from "@/lib/illustrations";
+import {
+  clearProjectImageGenerating,
+  removeStoredProjectImageVariants,
+} from "@/lib/project-images";
+import { clearTaskImageGenerating } from "@/lib/task-images";
 import { z } from "zod";
 
 const nameSchema = z
   .string()
   .min(2, "Le nom est trop court")
   .max(100, "Le nom est trop long");
+const profileNamePartSchema = z
+  .string()
+  .trim()
+  .max(80, "Le champ est trop long");
 
 const optionalString = z.string().trim().optional();
 const optionalNumber = z
@@ -72,6 +90,30 @@ const HOUSE_ICON_MIME_TO_EXT: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
+const USER_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const USER_AVATAR_MIME_TO_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+const USER_AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"] as const;
+const USER_AVATAR_CARTOONIFIED_SUFFIX = "-cartoonified.png";
+const USER_AVATAR_ORIGINAL_SUFFIX = "-cartoonify-original";
+const ENTITY_AVATAR_GHIBLI_SUFFIX = "-ghibli.png";
+const ENTITY_AVATAR_ORIGINAL_SUFFIX = "-ghibli-original";
+const ENTITY_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const ENTITY_IMAGE_MIME_TO_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+const APP_BACKGROUND_MAX_BYTES = 10 * 1024 * 1024;
+const APP_BACKGROUND_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"] as const;
+const USER_APP_BACKGROUND_ORIGINAL_SUFFIX = "-app-bg-original";
+const USER_APP_BACKGROUND_GHIBLI_SUFFIX = "-app-bg-ghibli.png";
+const USER_APP_BACKGROUND_GENERATED_SUFFIX = "-app-bg-generated.png";
 
 const recurrenceUnitSchema = z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]);
 const SHOPPING_TABLES_UNAVAILABLE_MESSAGE =
@@ -183,6 +225,126 @@ async function requireHouseEntity<T extends { houseId: string }>(
     throw new Error("Ressource introuvable");
   }
   return entity;
+}
+
+function isAvatarColumnUnavailableError(error: unknown, entity: "animal" | "person") {
+  const entityToken = entity.toLowerCase();
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code !== "P2021" && error.code !== "P2022") {
+      return false;
+    }
+
+    const meta = error.meta as { column?: unknown } | undefined;
+    const column = typeof meta?.column === "string" ? meta.column.toLowerCase() : "";
+    const message = error.message.toLowerCase();
+    return (
+      column.includes("imageurl") ||
+      (message.includes("imageurl") && message.includes(entityToken))
+    );
+  }
+
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("imageurl") &&
+      (message.includes("unknown argument") || message.includes("unknown field"))
+    );
+  }
+
+  return false;
+}
+
+function avatarSchemaUpgradeMessage() {
+  return "La base n'est pas à jour pour les avatars Animaux/Personnes. Lance `npm run db:push` puis recharge.";
+}
+
+async function loadAnimalForAvatarActions(animalId: string) {
+  try {
+    return await prisma.animal.findUnique({
+      where: { id: animalId },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        species: true,
+        imageUrl: true,
+      },
+    });
+  } catch (error) {
+    if (!isAvatarColumnUnavailableError(error, "animal")) {
+      throw error;
+    }
+
+    const fallback = await prisma.animal.findUnique({
+      where: { id: animalId },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        species: true,
+      },
+    });
+    return fallback ? { ...fallback, imageUrl: null as string | null } : null;
+  }
+}
+
+async function loadPersonForAvatarActions(personId: string) {
+  try {
+    return await prisma.person.findUnique({
+      where: { id: personId },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        relation: true,
+        imageUrl: true,
+      },
+    });
+  } catch (error) {
+    if (!isAvatarColumnUnavailableError(error, "person")) {
+      throw error;
+    }
+
+    const fallback = await prisma.person.findUnique({
+      where: { id: personId },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        relation: true,
+      },
+    });
+    return fallback ? { ...fallback, imageUrl: null as string | null } : null;
+  }
+}
+
+async function updateAnimalAvatarUrl(animalId: string, imageUrl: string | null) {
+  try {
+    await prisma.animal.update({
+      where: { id: animalId },
+      data: { imageUrl },
+    });
+  } catch (error) {
+    if (isAvatarColumnUnavailableError(error, "animal")) {
+      throw new Error(avatarSchemaUpgradeMessage());
+    }
+    throw error;
+  }
+}
+
+async function updatePersonAvatarUrl(personId: string, imageUrl: string | null) {
+  try {
+    await prisma.person.update({
+      where: { id: personId },
+      data: { imageUrl },
+    });
+  } catch (error) {
+    if (isAvatarColumnUnavailableError(error, "person")) {
+      throw new Error(avatarSchemaUpgradeMessage());
+    }
+    throw error;
+  }
 }
 
 async function requireShoppingListEntity(shoppingListId: string) {
@@ -320,8 +482,8 @@ function parseAmountCentsInput(value: FormDataEntryValue | null, fieldName: stri
     throw new Error(`${fieldName} est invalide`);
   }
 
-  if (amount < 0) {
-    throw new Error(`${fieldName} doit être positif`);
+  if (amount <= 0) {
+    throw new Error(`${fieldName} doit être strictement positif`);
   }
 
   if (amount > 1_000_000) {
@@ -688,37 +850,457 @@ function resolveHouseIconExtension(mimeType: string) {
   return HOUSE_ICON_MIME_TO_EXT[mimeType];
 }
 
-async function removeStoredHouseIcon(iconUrl?: string | null) {
-  if (!iconUrl || !iconUrl.startsWith("/house-icons/")) {
+function resolveUserAvatarExtension(mimeType: string) {
+  return USER_AVATAR_MIME_TO_EXT[mimeType];
+}
+
+function resolveEntityImageExtension(mimeType: string) {
+  return ENTITY_IMAGE_MIME_TO_EXT[mimeType];
+}
+
+function resolveImageMimeTypeFromExtension(extension: string) {
+  if (extension === "png") return "image/png";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "webp") return "image/webp";
+  if (extension === "gif") return "image/gif";
+  return null;
+}
+
+function resolveUserAvatarsDir() {
+  return path.join(process.cwd(), "public", "user-avatars");
+}
+
+function resolveAppBackgroundsDir() {
+  return path.join(process.cwd(), "public", "app-backgrounds");
+}
+
+function resolveUserAppBackgroundOriginalFilename(userId: string, extension: string) {
+  return `${userId}${USER_APP_BACKGROUND_ORIGINAL_SUFFIX}.${extension}`;
+}
+
+function resolveUserAppBackgroundGhibliFilename(userId: string) {
+  return `${userId}${USER_APP_BACKGROUND_GHIBLI_SUFFIX}`;
+}
+
+function resolveUserAppBackgroundGeneratedFilename(userId: string) {
+  return `${userId}${USER_APP_BACKGROUND_GENERATED_SUFFIX}`;
+}
+
+function resolveUserAppBackgroundUrl(filename: string) {
+  return `/app-backgrounds/${filename}`;
+}
+
+function resolveVersionedImageUrl(imageUrl: string) {
+  const separator = imageUrl.includes("?") ? "&" : "?";
+  return `${imageUrl}${separator}v=${Date.now()}`;
+}
+
+type AvatarEntityKind = "animal" | "person";
+
+function resolveEntityAvatarsFolder(kind: AvatarEntityKind) {
+  return kind === "animal" ? "animal-avatars" : "person-avatars";
+}
+
+function resolveEntityAvatarPrefix(kind: AvatarEntityKind) {
+  return kind === "animal" ? "/animal-avatars/" : "/person-avatars/";
+}
+
+function resolveEntityAvatarsDir(kind: AvatarEntityKind) {
+  return path.join(process.cwd(), "public", resolveEntityAvatarsFolder(kind));
+}
+
+function normalizeLocalImageUrl(imageUrl: string) {
+  return imageUrl.split(/[?#]/, 1)[0] ?? imageUrl;
+}
+
+function resolveLocalPublicImagePath(imageUrl: string) {
+  const normalizedUrl = normalizeLocalImageUrl(imageUrl);
+  if (!normalizedUrl.startsWith("/")) {
+    return null;
+  }
+  return path.join(process.cwd(), "public", normalizedUrl.replace(/^\//, ""));
+}
+
+function resolveUserAvatarCartoonifiedFilename(userId: string) {
+  return `${userId}${USER_AVATAR_CARTOONIFIED_SUFFIX}`;
+}
+
+function resolveUserAvatarCartoonifiedUrl(userId: string) {
+  return `/user-avatars/${resolveUserAvatarCartoonifiedFilename(userId)}`;
+}
+
+function resolveUserAvatarOriginalFilename(userId: string, extension: string) {
+  return `${userId}${USER_AVATAR_ORIGINAL_SUFFIX}.${extension}`;
+}
+
+function resolveEntityAvatarGhibliFilename(entityId: string) {
+  return `${entityId}${ENTITY_AVATAR_GHIBLI_SUFFIX}`;
+}
+
+function resolveEntityAvatarGhibliUrl(kind: AvatarEntityKind, entityId: string) {
+  return `${resolveEntityAvatarPrefix(kind)}${resolveEntityAvatarGhibliFilename(entityId)}`;
+}
+
+function resolveEntityAvatarOriginalFilename(entityId: string, extension: string) {
+  return `${entityId}${ENTITY_AVATAR_ORIGINAL_SUFFIX}.${extension}`;
+}
+
+async function resolveUserAvatarOriginalBackupUrl(userId: string) {
+  const avatarsDir = resolveUserAvatarsDir();
+  for (const extension of USER_AVATAR_EXTENSIONS) {
+    const filename = resolveUserAvatarOriginalFilename(userId, extension);
+    const absolutePath = path.join(avatarsDir, filename);
+    try {
+      await access(absolutePath);
+      return `/user-avatars/${filename}`;
+    } catch {
+      // try next extension
+    }
+  }
+  return null;
+}
+
+async function resolveUserAppBackgroundOriginalUrl(userId: string) {
+  const backgroundsDir = resolveAppBackgroundsDir();
+  for (const extension of APP_BACKGROUND_EXTENSIONS) {
+    const filename = resolveUserAppBackgroundOriginalFilename(userId, extension);
+    const absolutePath = path.join(backgroundsDir, filename);
+    try {
+      await access(absolutePath);
+      return resolveUserAppBackgroundUrl(filename);
+    } catch {
+      // try next extension
+    }
+  }
+  return null;
+}
+
+async function resolveEntityAvatarOriginalBackupUrl(
+  kind: AvatarEntityKind,
+  entityId: string
+) {
+  const avatarsDir = resolveEntityAvatarsDir(kind);
+  for (const extension of USER_AVATAR_EXTENSIONS) {
+    const filename = resolveEntityAvatarOriginalFilename(entityId, extension);
+    const absolutePath = path.join(avatarsDir, filename);
+    try {
+      await access(absolutePath);
+      return `${resolveEntityAvatarPrefix(kind)}${filename}`;
+    } catch {
+      // try next extension
+    }
+  }
+  return null;
+}
+
+async function removeUserAvatarOriginalBackups(userId: string) {
+  const avatarsDir = resolveUserAvatarsDir();
+  for (const extension of USER_AVATAR_EXTENSIONS) {
+    const filename = resolveUserAvatarOriginalFilename(userId, extension);
+    const absolutePath = path.join(avatarsDir, filename);
+    try {
+      await unlink(absolutePath);
+    } catch {
+      // ignore missing files
+    }
+  }
+}
+
+async function removeUserAppBackgroundOriginalBackups(userId: string) {
+  const backgroundsDir = resolveAppBackgroundsDir();
+  for (const extension of APP_BACKGROUND_EXTENSIONS) {
+    const filename = resolveUserAppBackgroundOriginalFilename(userId, extension);
+    const absolutePath = path.join(backgroundsDir, filename);
+    try {
+      await unlink(absolutePath);
+    } catch {
+      // ignore missing files
+    }
+  }
+}
+
+async function removeUserAppBackgroundGeneratedImages(userId: string) {
+  const backgroundsDir = resolveAppBackgroundsDir();
+  const filenames = [
+    resolveUserAppBackgroundGhibliFilename(userId),
+    resolveUserAppBackgroundGeneratedFilename(userId),
+  ];
+
+  await Promise.all(
+    filenames.map(async (filename) => {
+      const absolutePath = path.join(backgroundsDir, filename);
+      try {
+        await unlink(absolutePath);
+      } catch {
+        // ignore missing files
+      }
+    })
+  );
+}
+
+async function removeEntityAvatarOriginalBackups(kind: AvatarEntityKind, entityId: string) {
+  const avatarsDir = resolveEntityAvatarsDir(kind);
+  for (const extension of USER_AVATAR_EXTENSIONS) {
+    const filename = resolveEntityAvatarOriginalFilename(entityId, extension);
+    const absolutePath = path.join(avatarsDir, filename);
+    try {
+      await unlink(absolutePath);
+    } catch {
+      // ignore missing files
+    }
+  }
+}
+
+async function removeUserAvatarCartoonifiedImage(userId: string) {
+  const absolutePath = path.join(
+    resolveUserAvatarsDir(),
+    resolveUserAvatarCartoonifiedFilename(userId)
+  );
+  try {
+    await unlink(absolutePath);
+  } catch {
+    // ignore missing file
+  }
+}
+
+async function removeUserAvatarCartoonifyArtifacts(userId: string) {
+  await Promise.all([
+    removeUserAvatarOriginalBackups(userId),
+    removeUserAvatarCartoonifiedImage(userId),
+  ]);
+}
+
+async function removeEntityAvatarGhibliImage(kind: AvatarEntityKind, entityId: string) {
+  const absolutePath = path.join(
+    resolveEntityAvatarsDir(kind),
+    resolveEntityAvatarGhibliFilename(entityId)
+  );
+  try {
+    await unlink(absolutePath);
+  } catch {
+    // ignore missing file
+  }
+}
+
+async function removeEntityAvatarGhibliArtifacts(kind: AvatarEntityKind, entityId: string) {
+  await Promise.all([
+    removeEntityAvatarOriginalBackups(kind, entityId),
+    removeEntityAvatarGhibliImage(kind, entityId),
+  ]);
+}
+
+async function loadLocalImageAsDataUrl(imageUrl: string) {
+  const filePath = resolveLocalPublicImagePath(imageUrl);
+  if (!filePath) {
+    return null;
+  }
+
+  const extension = path.extname(filePath).replace(".", "").toLowerCase();
+  const mimeType = resolveImageMimeTypeFromExtension(extension);
+  if (!mimeType) {
+    return null;
+  }
+
+  try {
+    const buffer = await readFile(filePath);
+    return `data:${mimeType};base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+async function describeUserAvatarReference({
+  userName,
+  imageUrl,
+}: {
+  userName: string | null;
+  imageUrl: string;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.startsWith("sk-test")) {
+    return null;
+  }
+
+  const imageDataUrl = await loadLocalImageAsDataUrl(imageUrl);
+  if (!imageDataUrl) {
+    return null;
+  }
+
+  const model =
+    process.env.OPENAI_PROFILE_REFERENCE_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-4.1-mini";
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `Décris brièvement (max 20 mots) les repères visuels d'un portrait avatar ${
+                userName ? `de ${userName}` : "d'utilisateur"
+              } pour une illustration style Ghibli.`,
+            },
+            {
+              type: "input_image",
+              image_url: imageDataUrl,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as Record<string, unknown>;
+  const text = extractOpenAIOutputText(payload);
+  if (!text) {
+    return null;
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+async function describeEntityAvatarReference({
+  imageUrl,
+  targetName,
+  targetType,
+}: {
+  imageUrl: string;
+  targetName: string;
+  targetType: "animal" | "personne";
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.startsWith("sk-test")) {
+    return null;
+  }
+
+  const imageDataUrl = await loadLocalImageAsDataUrl(imageUrl);
+  if (!imageDataUrl) {
+    return null;
+  }
+
+  const model =
+    process.env.OPENAI_PROFILE_REFERENCE_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-4.1-mini";
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `Décris brièvement (max 20 mots) des repères visuels d'un avatar de ${targetType} nommé ${targetName}, pour une illustration style Ghibli.`,
+            },
+            {
+              type: "input_image",
+              image_url: imageDataUrl,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as Record<string, unknown>;
+  const text = extractOpenAIOutputText(payload);
+  if (!text) {
+    return null;
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+async function removeStoredEntityImage(
+  imageUrl: string | null | undefined,
+  options: { prefix: string; folder: string }
+) {
+  if (!imageUrl) {
     return;
   }
 
-  const iconFilename = path.basename(iconUrl);
-  const iconPath = path.join(process.cwd(), "public", "house-icons", iconFilename);
+  const normalizedUrl = normalizeLocalImageUrl(imageUrl);
+  if (!normalizedUrl.startsWith(options.prefix)) {
+    return;
+  }
+
+  const filename = path.basename(normalizedUrl);
+  const absolutePath = path.join(process.cwd(), "public", options.folder, filename);
 
   try {
-    await unlink(iconPath);
+    await unlink(absolutePath);
   } catch {
     // ignore missing or locked files
   }
 }
 
-async function generateAndAttachTaskImage(
-  taskId: string,
-  title: string,
-  description?: string | null
-) {
+async function removeStoredHouseIcon(iconUrl?: string | null) {
+  await removeStoredEntityImage(iconUrl, {
+    prefix: "/house-icons/",
+    folder: "house-icons",
+  });
+}
+
+async function removeStoredUserAvatar(avatarUrl?: string | null) {
+  await removeStoredEntityImage(avatarUrl, {
+    prefix: "/user-avatars/",
+    folder: "user-avatars",
+  });
+}
+
+async function removeStoredAnimalAvatar(avatarUrl?: string | null) {
+  await removeStoredEntityImage(avatarUrl, {
+    prefix: "/animal-avatars/",
+    folder: "animal-avatars",
+  });
+}
+
+async function removeStoredPersonAvatar(avatarUrl?: string | null) {
+  await removeStoredEntityImage(avatarUrl, {
+    prefix: "/person-avatars/",
+    folder: "person-avatars",
+  });
+}
+
+async function removeStoredTaskImage(imageUrl?: string | null) {
+  await removeStoredEntityImage(imageUrl, {
+    prefix: "/task-images/",
+    folder: "task-images",
+  });
+}
+
+async function generateImageBufferFromPrompt(prompt: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.startsWith("sk-test")) {
     console.warn("OpenAI image generation skipped: missing API key.");
-    return;
+    return null;
   }
 
   const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
-  const prompt = `Illustration cartoon fun, chaleureuse et colorée de: ${title}. ${
-    description ? `Détails: ${description}.` : ""
-  } Style: illustration simple, propre, sans texte.`;
-
   let response: Response;
   try {
     response = await fetch("https://api.openai.com/v1/images/generations", {
@@ -736,40 +1318,129 @@ async function generateAndAttachTaskImage(
     });
   } catch (error) {
     console.error("OpenAI image generation failed (network).", error);
-    return;
+    return null;
   }
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error("OpenAI image generation failed.", response.status, errorText);
-    return;
+    return null;
   }
 
   const data = await response.json();
-  const imagesDir = path.join(process.cwd(), "public", "task-images");
-  await mkdir(imagesDir, { recursive: true });
-  const filePath = path.join(imagesDir, `${taskId}.png`);
-
   const b64 = data?.data?.[0]?.b64_json;
   if (b64) {
-    await writeFile(filePath, Buffer.from(b64, "base64"));
-  } else if (data?.data?.[0]?.url) {
+    return Buffer.from(b64, "base64");
+  }
+
+  if (data?.data?.[0]?.url) {
     const imageResponse = await fetch(data.data[0].url);
     if (!imageResponse.ok) {
       console.error("OpenAI image download failed.", imageResponse.status);
-      return;
+      return null;
     }
     const arrayBuffer = await imageResponse.arrayBuffer();
-    await writeFile(filePath, Buffer.from(arrayBuffer));
-  } else {
-    console.error("OpenAI image generation returned empty payload.");
-    return;
+    return Buffer.from(arrayBuffer);
   }
 
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { imageUrl: `/task-images/${taskId}.png` },
-  });
+  console.error("OpenAI image generation returned empty payload.");
+  return null;
+}
+
+async function generateImageBufferFromPromptWithReferenceImage({
+  prompt,
+  referenceImageUrl,
+}: {
+  prompt: string;
+  referenceImageUrl: string;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.startsWith("sk-test")) {
+    console.warn("OpenAI image generation skipped: missing API key.");
+    return null;
+  }
+
+  const referenceImagePath = resolveLocalPublicImagePath(referenceImageUrl);
+  if (!referenceImagePath) {
+    return generateImageBufferFromPrompt(prompt);
+  }
+
+  const extension = path.extname(referenceImagePath).replace(".", "").toLowerCase();
+  const resolvedMimeType = resolveImageMimeTypeFromExtension(extension);
+  if (!resolvedMimeType) {
+    return generateImageBufferFromPrompt(prompt);
+  }
+  const referenceMimeType: string = resolvedMimeType;
+
+  let referenceBuffer: Buffer;
+  try {
+    referenceBuffer = await readFile(referenceImagePath);
+  } catch {
+    return generateImageBufferFromPrompt(prompt);
+  }
+
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+
+  async function requestImageEdit(fieldName: "image" | "image[]") {
+    const formData = new FormData();
+    const referenceArrayBuffer = referenceBuffer.buffer.slice(
+      referenceBuffer.byteOffset,
+      referenceBuffer.byteOffset + referenceBuffer.byteLength
+    ) as ArrayBuffer;
+    const referenceBlob = new Blob([referenceArrayBuffer], { type: referenceMimeType });
+    formData.append("model", model);
+    formData.append("prompt", prompt);
+    formData.append("size", "1024x1024");
+    formData.append("output_format", "png");
+    formData.append(fieldName, referenceBlob, `reference.${extension || "png"}`);
+
+    let response: Response;
+    try {
+      response = await fetch("https://api.openai.com/v1/images/edits", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: formData,
+      });
+    } catch (error) {
+      console.error("OpenAI image edit failed (network).", error);
+      return null;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI image edit failed.", response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    const b64 = data?.data?.[0]?.b64_json;
+    if (b64) {
+      return Buffer.from(b64, "base64");
+    }
+
+    if (data?.data?.[0]?.url) {
+      const imageResponse = await fetch(data.data[0].url);
+      if (!imageResponse.ok) {
+        console.error("OpenAI image download failed.", imageResponse.status);
+        return null;
+      }
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    }
+
+    console.error("OpenAI image edit returned empty payload.");
+    return null;
+  }
+
+  // Some model versions require `image[]`, others accept `image`.
+  const editedWithArrayField = await requestImageEdit("image[]");
+  if (editedWithArrayField) {
+    return editedWithArrayField;
+  }
+
+  return requestImageEdit("image");
 }
 
 export async function regenerateTaskImage(formData: FormData) {
@@ -778,7 +1449,13 @@ export async function regenerateTaskImage(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true, title: true, description: true },
+    select: {
+      houseId: true,
+      title: true,
+      description: true,
+      personId: true,
+      assigneeId: true,
+    },
   });
 
   if (!task) {
@@ -787,20 +1464,326 @@ export async function regenerateTaskImage(formData: FormData) {
 
   await requireMembership(userId, task.houseId);
 
-  await generateAndAttachTaskImage(taskId, task.title, task.description);
+  await enqueueTaskIllustration({
+    houseId: task.houseId,
+    userId,
+    taskId,
+    title: task.title,
+    description: task.description,
+    personId: task.personId,
+    assigneeId: task.assigneeId,
+    replaceExisting: true,
+  });
 
   revalidateApp();
   revalidatePath(`/app/tasks/${taskId}`);
 }
 
+export async function uploadTaskImage(formData: FormData) {
+  const userId = await requireUser();
+  const taskId = z.string().cuid().parse(formData.get("taskId"));
+  const imageFile = formData.get("imageFile");
+
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { id: true, houseId: true, imageUrl: true },
+  });
+
+  if (!task) {
+    throw new Error("Task not found");
+  }
+
+  await requireMembership(userId, task.houseId);
+
+  if (!(imageFile instanceof File) || imageFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (imageFile.size > ENTITY_IMAGE_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (8 Mo max)");
+  }
+
+  const extension = resolveEntityImageExtension(imageFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const imagesDir = path.join(process.cwd(), "public", "task-images");
+  await mkdir(imagesDir, { recursive: true });
+
+  const filename = `${taskId}-${Date.now()}-${randomBytes(4).toString("hex")}.${extension}`;
+  const filePath = path.join(imagesDir, filename);
+  const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+  await writeFile(filePath, imageBuffer);
+
+  const newImageUrl = `/task-images/${filename}`;
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { imageUrl: newImageUrl },
+  });
+
+  await removeStoredTaskImage(task.imageUrl);
+  await clearTaskImageGenerating(taskId);
+
+  revalidateApp();
+  revalidatePath(`/app/tasks/${taskId}`);
+}
+
+export async function regenerateProjectImage(formData: FormData) {
+  const userId = await requireUser();
+  const projectId = z.string().cuid().parse(formData.get("projectId"));
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, houseId: true, name: true, description: true },
+  });
+
+  if (!project) {
+    throw new Error("Projet introuvable");
+  }
+
+  await requireOwner(userId, project.houseId);
+
+  await enqueueProjectIllustration({
+    userId,
+    projectId: project.id,
+    name: project.name,
+    description: project.description,
+    replaceExisting: true,
+  });
+
+  revalidateApp();
+  revalidatePath("/app/projects");
+  revalidatePath(`/app/projects/${projectId}`);
+}
+
+export async function uploadProjectImage(formData: FormData) {
+  const userId = await requireUser();
+  const projectId = z.string().cuid().parse(formData.get("projectId"));
+  const imageFile = formData.get("imageFile");
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, houseId: true },
+  });
+
+  if (!project) {
+    throw new Error("Projet introuvable");
+  }
+
+  await requireOwner(userId, project.houseId);
+
+  if (!(imageFile instanceof File) || imageFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (imageFile.size > ENTITY_IMAGE_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (8 Mo max)");
+  }
+
+  const extension = resolveEntityImageExtension(imageFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const imagesDir = path.join(process.cwd(), "public", "project-images");
+  await mkdir(imagesDir, { recursive: true });
+  await removeStoredProjectImageVariants(projectId);
+
+  const filename = `${projectId}.${extension}`;
+  const filePath = path.join(imagesDir, filename);
+  const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+  await writeFile(filePath, imageBuffer);
+  await clearProjectImageGenerating(projectId);
+
+  revalidateApp();
+  revalidatePath("/app/projects");
+  revalidatePath(`/app/projects/${projectId}`);
+}
+
+export async function regenerateEquipmentImage(formData: FormData) {
+  const userId = await requireUser();
+  const equipmentId = z.string().cuid().parse(formData.get("equipmentId"));
+
+  const equipment = await prisma.equipment.findUnique({
+    where: { id: equipmentId },
+    select: { id: true, houseId: true, name: true, location: true, category: true },
+  });
+
+  if (!equipment) {
+    throw new Error("Équipement introuvable");
+  }
+
+  await requireOwner(userId, equipment.houseId);
+
+  await enqueueEquipmentIllustration({
+    userId,
+    equipmentId: equipment.id,
+    name: equipment.name,
+    location: equipment.location,
+    category: equipment.category,
+    replaceExisting: true,
+  });
+
+  revalidateApp();
+  revalidatePath("/app/equipment");
+}
+
+export async function uploadEquipmentImage(formData: FormData) {
+  const userId = await requireUser();
+  const equipmentId = z.string().cuid().parse(formData.get("equipmentId"));
+  const imageFile = formData.get("imageFile");
+
+  const equipment = await prisma.equipment.findUnique({
+    where: { id: equipmentId },
+    select: { id: true, houseId: true },
+  });
+
+  if (!equipment) {
+    throw new Error("Équipement introuvable");
+  }
+
+  await requireOwner(userId, equipment.houseId);
+
+  if (!(imageFile instanceof File) || imageFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (imageFile.size > ENTITY_IMAGE_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (8 Mo max)");
+  }
+
+  const extension = resolveEntityImageExtension(imageFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const imagesDir = path.join(process.cwd(), "public", "equipment-images");
+  await mkdir(imagesDir, { recursive: true });
+  await removeStoredEquipmentImageVariants(equipmentId);
+
+  const filename = `${equipmentId}.${extension}`;
+  const filePath = path.join(imagesDir, filename);
+  const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+  await writeFile(filePath, imageBuffer);
+  await clearEquipmentImageGenerating(equipmentId);
+
+  revalidateApp();
+  revalidatePath("/app/equipment");
+}
+
 function revalidateApp() {
   revalidatePath("/");
   revalidatePath("/app");
+  revalidatePath("/app/profile");
   revalidatePath("/app/tasks");
+  revalidatePath("/app/projects");
+  revalidatePath("/app/equipment");
   revalidatePath("/app/calendar");
   revalidatePath("/app/budgets");
   revalidatePath("/app/shopping-lists");
   revalidatePath("/app/settings");
+}
+
+export async function uploadAppBackground(formData: FormData) {
+  const userId = await requireUser();
+  const backgroundFile = formData.get("backgroundFile");
+
+  if (!(backgroundFile instanceof File) || backgroundFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (backgroundFile.size > APP_BACKGROUND_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (10 Mo max)");
+  }
+
+  const extension = resolveEntityImageExtension(backgroundFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const backgroundsDir = resolveAppBackgroundsDir();
+  await mkdir(backgroundsDir, { recursive: true });
+
+  await removeUserAppBackgroundOriginalBackups(userId);
+  await removeUserAppBackgroundGeneratedImages(userId);
+
+  const filename = resolveUserAppBackgroundOriginalFilename(userId, extension);
+  const filePath = path.join(backgroundsDir, filename);
+  const imageBuffer = Buffer.from(await backgroundFile.arrayBuffer());
+  await writeFile(filePath, imageBuffer);
+
+  return { imageUrl: resolveVersionedImageUrl(resolveUserAppBackgroundUrl(filename)) };
+}
+
+export async function generateAppBackgroundGhibli(formData: FormData) {
+  const userId = await requireUser();
+  const promptRaw = formData.get("prompt");
+  const promptHint = z
+    .string()
+    .trim()
+    .max(240, "Le prompt est trop long")
+    .optional()
+    .parse(typeof promptRaw === "string" ? promptRaw : undefined);
+
+  const prompt = [
+    "Illustration panoramique style Ghibli pour fond d'application web.",
+    "Ambiance chaleureuse, poétique, artisanale, lumière naturelle, sans personnages, sans texte.",
+    promptHint ? `Contexte: ${promptHint}.` : "",
+    "Composition lisible derrière une interface, équilibrée, avec zones de repos visuel.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const generatedBuffer = await generateImageBufferFromPrompt(prompt);
+  if (!generatedBuffer) {
+    throw new Error("La génération du fond a échoué. Réessaie dans quelques instants.");
+  }
+
+  const backgroundsDir = resolveAppBackgroundsDir();
+  await mkdir(backgroundsDir, { recursive: true });
+
+  const filename = resolveUserAppBackgroundGeneratedFilename(userId);
+  const filePath = path.join(backgroundsDir, filename);
+  await writeFile(filePath, generatedBuffer);
+
+  return { imageUrl: resolveVersionedImageUrl(resolveUserAppBackgroundUrl(filename)) };
+}
+
+export async function ghiblifyUploadedAppBackground() {
+  const userId = await requireUser();
+  const originalBackgroundUrl = await resolveUserAppBackgroundOriginalUrl(userId);
+
+  if (!originalBackgroundUrl) {
+    throw new Error(
+      "Importe d'abord une photo avant d'appliquer le style Ghibli au fond."
+    );
+  }
+
+  const prompt = [
+    "Transformer cette photo en illustration style Ghibli pour un fond d'application.",
+    "Conserver les volumes principaux, les couleurs harmonieuses et une ambiance douce.",
+    "Résultat: peinture détaillée, sans texte, sans personnages.",
+  ].join(" ");
+
+  const ghibliBuffer = await generateImageBufferFromPromptWithReferenceImage({
+    prompt,
+    referenceImageUrl: originalBackgroundUrl,
+  });
+  if (!ghibliBuffer) {
+    throw new Error(
+      "La ghiblification du fond a échoué. Réessaie dans quelques instants."
+    );
+  }
+
+  const backgroundsDir = resolveAppBackgroundsDir();
+  await mkdir(backgroundsDir, { recursive: true });
+
+  const filename = resolveUserAppBackgroundGhibliFilename(userId);
+  const filePath = path.join(backgroundsDir, filename);
+  await writeFile(filePath, ghibliBuffer);
+
+  return { imageUrl: resolveVersionedImageUrl(resolveUserAppBackgroundUrl(filename)) };
 }
 
 export async function createHouse(formData: FormData) {
@@ -832,6 +1815,206 @@ export async function createHouse(formData: FormData) {
 
   revalidateApp();
   redirect("/app");
+}
+
+export async function updateUserProfile(formData: FormData) {
+  const userId = await requireUser();
+  const firstName = profileNamePartSchema.parse(formData.get("firstName"));
+  const lastName = profileNamePartSchema.parse(formData.get("lastName"));
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+  if (!fullName) {
+    throw new Error("Le prénom ou le nom est requis");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name: fullName },
+  });
+
+  revalidateApp();
+}
+
+export async function uploadUserAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const avatarFile = formData.get("avatarFile");
+
+  if (!(avatarFile instanceof File) || avatarFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (avatarFile.size > USER_AVATAR_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (5 Mo max)");
+  }
+
+  const extension = resolveUserAvatarExtension(avatarFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, image: true },
+  });
+
+  if (!user) {
+    throw new Error("Utilisateur introuvable");
+  }
+
+  const avatarsDir = resolveUserAvatarsDir();
+  await mkdir(avatarsDir, { recursive: true });
+
+  const filename = `${userId}-${Date.now()}-${randomBytes(4).toString("hex")}.${extension}`;
+  const avatarPath = path.join(avatarsDir, filename);
+  const avatarBuffer = Buffer.from(await avatarFile.arrayBuffer());
+  await writeFile(avatarPath, avatarBuffer);
+
+  const newAvatarUrl = `/user-avatars/${filename}`;
+  await prisma.user.update({
+    where: { id: userId },
+    data: { image: newAvatarUrl },
+  });
+  await removeStoredUserAvatar(user.image);
+  await removeUserAvatarCartoonifyArtifacts(userId);
+
+  revalidateApp();
+}
+
+export async function cartoonifyUserAvatar() {
+  const userId = await requireUser();
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, image: true },
+  });
+
+  if (!user?.image) {
+    throw new Error("Aucun avatar à transformer.");
+  }
+
+  if (!user.image.startsWith("/user-avatars/")) {
+    throw new Error("Importe d'abord un avatar local avant de lancer le style Ghibli.");
+  }
+
+  const currentAvatarPath = resolveLocalPublicImagePath(user.image);
+  if (!currentAvatarPath) {
+    throw new Error("Avatar introuvable.");
+  }
+
+  const avatarsDir = resolveUserAvatarsDir();
+  await mkdir(avatarsDir, { recursive: true });
+
+  let originalAvatarUrl = await resolveUserAvatarOriginalBackupUrl(userId);
+  if (!originalAvatarUrl) {
+    const extension = path.extname(currentAvatarPath).replace(".", "").toLowerCase();
+    const mimeType = resolveImageMimeTypeFromExtension(extension);
+    if (!mimeType) {
+      throw new Error("Format d'image non supporté pour le style Ghibli.");
+    }
+
+    const sourceBuffer = await readFile(currentAvatarPath);
+    const originalFilename = resolveUserAvatarOriginalFilename(userId, extension);
+    const originalPath = path.join(avatarsDir, originalFilename);
+
+    await removeUserAvatarOriginalBackups(userId);
+    await writeFile(originalPath, sourceBuffer);
+
+    originalAvatarUrl = `/user-avatars/${originalFilename}`;
+  }
+  if (!originalAvatarUrl) {
+    throw new Error("L'image d'origine est introuvable.");
+  }
+
+  const referenceDescription = await describeUserAvatarReference({
+    userName: user.name ?? null,
+    imageUrl: originalAvatarUrl,
+  });
+  const prompt = [
+    "Illustration style Ghibli, chaleureuse, artisanale et colorée d'un avatar portrait.",
+    referenceDescription ? `Repères visuels: ${referenceDescription}.` : "",
+    "Style: ambiance Ghibli, doux, narratif, sans texte, cadrage portrait.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const cartoonBuffer = await generateImageBufferFromPromptWithReferenceImage({
+    prompt,
+    referenceImageUrl: originalAvatarUrl,
+  });
+  if (!cartoonBuffer) {
+    throw new Error(
+      "La génération en style Ghibli a échoué. Réessaie dans quelques instants."
+    );
+  }
+
+  const cartoonFilename = resolveUserAvatarCartoonifiedFilename(userId);
+  const cartoonPath = path.join(avatarsDir, cartoonFilename);
+  await writeFile(cartoonPath, cartoonBuffer);
+
+  const cartoonUrl = resolveUserAvatarCartoonifiedUrl(userId);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { image: cartoonUrl },
+  });
+
+  if (user.image !== cartoonUrl && user.image !== originalAvatarUrl) {
+    await removeStoredUserAvatar(user.image);
+  }
+
+  revalidateApp();
+}
+
+export async function restoreUserAvatar() {
+  const userId = await requireUser();
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, image: true },
+  });
+
+  if (!user?.image) {
+    throw new Error("Aucun avatar à restaurer.");
+  }
+
+  const cartoonUrl = resolveUserAvatarCartoonifiedUrl(userId);
+  if (user.image !== cartoonUrl) {
+    return;
+  }
+
+  const originalAvatarUrl = await resolveUserAvatarOriginalBackupUrl(userId);
+  if (!originalAvatarUrl) {
+    throw new Error("L'image d'origine est introuvable.");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { image: originalAvatarUrl },
+  });
+
+  await removeStoredUserAvatar(cartoonUrl);
+  revalidateApp();
+}
+
+export async function removeUserAvatar() {
+  const userId = await requireUser();
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, image: true },
+  });
+
+  if (!user) {
+    throw new Error("Utilisateur introuvable");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { image: null },
+  });
+
+  await removeStoredUserAvatar(user.image);
+  await removeUserAvatarCartoonifyArtifacts(userId);
+  revalidateApp();
 }
 
 export async function uploadHouseIcon(formData: FormData) {
@@ -976,7 +2159,7 @@ export async function createProject(formData: FormData) {
 
   await requireOwner(userId, houseId);
 
-  await prisma.project.create({
+  const createdProject = await prisma.project.create({
     data: {
       houseId,
       name,
@@ -984,6 +2167,14 @@ export async function createProject(formData: FormData) {
       startsAt,
       endsAt,
     },
+    select: { id: true },
+  });
+
+  await enqueueProjectIllustration({
+    userId,
+    projectId: createdProject.id,
+    name,
+    description,
   });
 
   revalidateApp();
@@ -1008,11 +2199,16 @@ export async function updateProject(formData: FormData) {
   });
 
   revalidateApp();
+  revalidatePath(`/app/projects/${projectId}`);
 }
 
 export async function deleteProject(formData: FormData) {
   const userId = await requireUser();
   const projectId = cuidSchema.parse(formData.get("projectId"));
+  const redirectToProjects = z
+    .enum(["0", "1"])
+    .optional()
+    .parse(formData.get("redirectToProjects")?.toString());
 
   const project = await requireHouseEntity(
     await prisma.project.findUnique({ where: { id: projectId } })
@@ -1020,8 +2216,15 @@ export async function deleteProject(formData: FormData) {
   await requireOwner(userId, project.houseId);
 
   await prisma.project.delete({ where: { id: projectId } });
+  await removeStoredProjectImageVariants(projectId);
+  await clearProjectImageGenerating(projectId);
 
   revalidateApp();
+  revalidatePath(`/app/projects/${projectId}`);
+
+  if (redirectToProjects === "1") {
+    redirect("/app/projects");
+  }
 }
 
 export async function createEquipment(formData: FormData) {
@@ -1038,7 +2241,7 @@ export async function createEquipment(formData: FormData) {
 
   await requireOwner(userId, houseId);
 
-  await prisma.equipment.create({
+  const createdEquipment = await prisma.equipment.create({
     data: {
       houseId,
       name,
@@ -1051,6 +2254,15 @@ export async function createEquipment(formData: FormData) {
           ? lifespanMonths
           : null,
     },
+    select: { id: true },
+  });
+
+  await enqueueEquipmentIllustration({
+    userId,
+    equipmentId: createdEquipment.id,
+    name,
+    location,
+    category,
   });
 
   revalidateApp();
@@ -1101,6 +2313,8 @@ export async function deleteEquipment(formData: FormData) {
   await requireOwner(userId, equipment.houseId);
 
   await prisma.equipment.delete({ where: { id: equipmentId } });
+  await removeStoredEquipmentImageVariants(equipmentId);
+  await clearEquipmentImageGenerating(equipmentId);
 
   revalidateApp();
 }
@@ -1638,7 +2852,10 @@ export async function updateAnimal(formData: FormData) {
   const species = optionalString.parse(formData.get("species")?.toString());
 
   const animal = await requireHouseEntity(
-    await prisma.animal.findUnique({ where: { id: animalId } })
+    await prisma.animal.findUnique({
+      where: { id: animalId },
+      select: { id: true, houseId: true },
+    })
   );
   await requireOwner(userId, animal.houseId);
 
@@ -1654,12 +2871,12 @@ export async function deleteAnimal(formData: FormData) {
   const userId = await requireUser();
   const animalId = cuidSchema.parse(formData.get("animalId"));
 
-  const animal = await requireHouseEntity(
-    await prisma.animal.findUnique({ where: { id: animalId } })
-  );
+  const animal = await requireHouseEntity(await loadAnimalForAvatarActions(animalId));
   await requireOwner(userId, animal.houseId);
 
   await prisma.animal.delete({ where: { id: animalId } });
+  await removeStoredAnimalAvatar(animal.imageUrl);
+  await removeEntityAvatarGhibliArtifacts("animal", animalId);
 
   revalidateApp();
 }
@@ -1671,7 +2888,10 @@ export async function updatePerson(formData: FormData) {
   const relation = optionalString.parse(formData.get("relation")?.toString());
 
   const person = await requireHouseEntity(
-    await prisma.person.findUnique({ where: { id: personId } })
+    await prisma.person.findUnique({
+      where: { id: personId },
+      select: { id: true, houseId: true },
+    })
   );
   await requireOwner(userId, person.houseId);
 
@@ -1687,13 +2907,328 @@ export async function deletePerson(formData: FormData) {
   const userId = await requireUser();
   const personId = cuidSchema.parse(formData.get("personId"));
 
-  const person = await requireHouseEntity(
-    await prisma.person.findUnique({ where: { id: personId } })
-  );
+  const person = await requireHouseEntity(await loadPersonForAvatarActions(personId));
   await requireOwner(userId, person.houseId);
 
   await prisma.person.delete({ where: { id: personId } });
+  await removeStoredPersonAvatar(person.imageUrl);
+  await removeEntityAvatarGhibliArtifacts("person", personId);
 
+  revalidateApp();
+}
+
+export async function uploadAnimalAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const animalId = cuidSchema.parse(formData.get("animalId"));
+  const avatarFile = formData.get("avatarFile");
+
+  if (!(avatarFile instanceof File) || avatarFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (avatarFile.size > USER_AVATAR_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (5 Mo max)");
+  }
+
+  const extension = resolveUserAvatarExtension(avatarFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const animal = await requireHouseEntity(await loadAnimalForAvatarActions(animalId));
+  await requireOwner(userId, animal.houseId);
+
+  const avatarsDir = resolveEntityAvatarsDir("animal");
+  await mkdir(avatarsDir, { recursive: true });
+
+  const filename = `${animalId}-${Date.now()}-${randomBytes(4).toString("hex")}.${extension}`;
+  const avatarPath = path.join(avatarsDir, filename);
+  const avatarBuffer = Buffer.from(await avatarFile.arrayBuffer());
+  await writeFile(avatarPath, avatarBuffer);
+
+  const newAvatarUrl = `${resolveEntityAvatarPrefix("animal")}${filename}`;
+  await updateAnimalAvatarUrl(animalId, newAvatarUrl);
+
+  await removeStoredAnimalAvatar(animal.imageUrl);
+  await removeEntityAvatarGhibliArtifacts("animal", animalId);
+  revalidateApp();
+}
+
+export async function applyAnimalAvatarGhibliStyle(formData: FormData) {
+  const userId = await requireUser();
+  const animalId = cuidSchema.parse(formData.get("animalId"));
+
+  const animal = await requireHouseEntity(await loadAnimalForAvatarActions(animalId));
+  await requireOwner(userId, animal.houseId);
+
+  if (!animal.imageUrl) {
+    throw new Error("Aucun avatar à transformer.");
+  }
+
+  const avatarPrefix = resolveEntityAvatarPrefix("animal");
+  if (!animal.imageUrl.startsWith(avatarPrefix)) {
+    throw new Error("Importe d'abord un avatar local avant d'appliquer le style Ghibli.");
+  }
+
+  const currentAvatarPath = resolveLocalPublicImagePath(animal.imageUrl);
+  if (!currentAvatarPath) {
+    throw new Error("Avatar introuvable.");
+  }
+
+  const avatarsDir = resolveEntityAvatarsDir("animal");
+  await mkdir(avatarsDir, { recursive: true });
+
+  let originalAvatarUrl = await resolveEntityAvatarOriginalBackupUrl("animal", animalId);
+  if (!originalAvatarUrl) {
+    const extension = path.extname(currentAvatarPath).replace(".", "").toLowerCase();
+    const mimeType = resolveImageMimeTypeFromExtension(extension);
+    if (!mimeType) {
+      throw new Error("Format d'image non supporté pour le style Ghibli.");
+    }
+
+    const sourceBuffer = await readFile(currentAvatarPath);
+    const originalFilename = resolveEntityAvatarOriginalFilename(animalId, extension);
+    const originalPath = path.join(avatarsDir, originalFilename);
+
+    await removeEntityAvatarOriginalBackups("animal", animalId);
+    await writeFile(originalPath, sourceBuffer);
+
+    originalAvatarUrl = `${avatarPrefix}${originalFilename}`;
+  }
+
+  const referenceDescription = await describeEntityAvatarReference({
+    imageUrl: originalAvatarUrl,
+    targetName: animal.name,
+    targetType: "animal",
+  });
+  const prompt = [
+    "Illustration style Ghibli, chaleureuse, artisanale et colorée d'un avatar animal.",
+    `Sujet: ${animal.name}.`,
+    animal.species ? `Espèce: ${animal.species}.` : "",
+    referenceDescription ? `Repères visuels: ${referenceDescription}.` : "",
+    "Style: ambiance Ghibli, doux, narratif, sans texte, cadrage portrait.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const ghibliBuffer = await generateImageBufferFromPromptWithReferenceImage({
+    prompt,
+    referenceImageUrl: originalAvatarUrl,
+  });
+  if (!ghibliBuffer) {
+    throw new Error(
+      "La génération en style Ghibli a échoué. Réessaie dans quelques instants."
+    );
+  }
+
+  const ghibliFilename = resolveEntityAvatarGhibliFilename(animalId);
+  const ghibliPath = path.join(avatarsDir, ghibliFilename);
+  await writeFile(ghibliPath, ghibliBuffer);
+
+  const ghibliUrl = resolveEntityAvatarGhibliUrl("animal", animalId);
+  await updateAnimalAvatarUrl(animalId, ghibliUrl);
+
+  if (animal.imageUrl !== ghibliUrl && animal.imageUrl !== originalAvatarUrl) {
+    await removeStoredAnimalAvatar(animal.imageUrl);
+  }
+
+  revalidateApp();
+}
+
+export async function restoreAnimalAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const animalId = cuidSchema.parse(formData.get("animalId"));
+
+  const animal = await requireHouseEntity(await loadAnimalForAvatarActions(animalId));
+  await requireOwner(userId, animal.houseId);
+
+  if (!animal.imageUrl) {
+    throw new Error("Aucun avatar à restaurer.");
+  }
+
+  const ghibliUrl = resolveEntityAvatarGhibliUrl("animal", animalId);
+  if (animal.imageUrl !== ghibliUrl) {
+    return;
+  }
+
+  const originalAvatarUrl = await resolveEntityAvatarOriginalBackupUrl("animal", animalId);
+  if (!originalAvatarUrl) {
+    throw new Error("L'image d'origine est introuvable.");
+  }
+
+  await updateAnimalAvatarUrl(animalId, originalAvatarUrl);
+
+  await removeStoredAnimalAvatar(ghibliUrl);
+  revalidateApp();
+}
+
+export async function removeAnimalAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const animalId = cuidSchema.parse(formData.get("animalId"));
+
+  const animal = await requireHouseEntity(await loadAnimalForAvatarActions(animalId));
+  await requireOwner(userId, animal.houseId);
+
+  await updateAnimalAvatarUrl(animalId, null);
+
+  await removeStoredAnimalAvatar(animal.imageUrl);
+  await removeEntityAvatarGhibliArtifacts("animal", animalId);
+  revalidateApp();
+}
+
+export async function uploadPersonAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const personId = cuidSchema.parse(formData.get("personId"));
+  const avatarFile = formData.get("avatarFile");
+
+  if (!(avatarFile instanceof File) || avatarFile.size === 0) {
+    throw new Error("Aucune image sélectionnée");
+  }
+
+  if (avatarFile.size > USER_AVATAR_MAX_BYTES) {
+    throw new Error("L'image est trop lourde (5 Mo max)");
+  }
+
+  const extension = resolveUserAvatarExtension(avatarFile.type);
+  if (!extension) {
+    throw new Error("Format d'image non supporté (PNG, JPG, WEBP, GIF)");
+  }
+
+  const person = await requireHouseEntity(await loadPersonForAvatarActions(personId));
+  await requireOwner(userId, person.houseId);
+
+  const avatarsDir = resolveEntityAvatarsDir("person");
+  await mkdir(avatarsDir, { recursive: true });
+
+  const filename = `${personId}-${Date.now()}-${randomBytes(4).toString("hex")}.${extension}`;
+  const avatarPath = path.join(avatarsDir, filename);
+  const avatarBuffer = Buffer.from(await avatarFile.arrayBuffer());
+  await writeFile(avatarPath, avatarBuffer);
+
+  const newAvatarUrl = `${resolveEntityAvatarPrefix("person")}${filename}`;
+  await updatePersonAvatarUrl(personId, newAvatarUrl);
+
+  await removeStoredPersonAvatar(person.imageUrl);
+  await removeEntityAvatarGhibliArtifacts("person", personId);
+  revalidateApp();
+}
+
+export async function applyPersonAvatarGhibliStyle(formData: FormData) {
+  const userId = await requireUser();
+  const personId = cuidSchema.parse(formData.get("personId"));
+
+  const person = await requireHouseEntity(await loadPersonForAvatarActions(personId));
+  await requireOwner(userId, person.houseId);
+
+  if (!person.imageUrl) {
+    throw new Error("Aucun avatar à transformer.");
+  }
+
+  const avatarPrefix = resolveEntityAvatarPrefix("person");
+  if (!person.imageUrl.startsWith(avatarPrefix)) {
+    throw new Error("Importe d'abord un avatar local avant d'appliquer le style Ghibli.");
+  }
+
+  const currentAvatarPath = resolveLocalPublicImagePath(person.imageUrl);
+  if (!currentAvatarPath) {
+    throw new Error("Avatar introuvable.");
+  }
+
+  const avatarsDir = resolveEntityAvatarsDir("person");
+  await mkdir(avatarsDir, { recursive: true });
+
+  let originalAvatarUrl = await resolveEntityAvatarOriginalBackupUrl("person", personId);
+  if (!originalAvatarUrl) {
+    const extension = path.extname(currentAvatarPath).replace(".", "").toLowerCase();
+    const mimeType = resolveImageMimeTypeFromExtension(extension);
+    if (!mimeType) {
+      throw new Error("Format d'image non supporté pour le style Ghibli.");
+    }
+
+    const sourceBuffer = await readFile(currentAvatarPath);
+    const originalFilename = resolveEntityAvatarOriginalFilename(personId, extension);
+    const originalPath = path.join(avatarsDir, originalFilename);
+
+    await removeEntityAvatarOriginalBackups("person", personId);
+    await writeFile(originalPath, sourceBuffer);
+
+    originalAvatarUrl = `${avatarPrefix}${originalFilename}`;
+  }
+
+  const referenceDescription = await describeEntityAvatarReference({
+    imageUrl: originalAvatarUrl,
+    targetName: person.name,
+    targetType: "personne",
+  });
+  const prompt = [
+    "Illustration style Ghibli, chaleureuse, artisanale et colorée d'un avatar portrait.",
+    `Sujet: ${person.name}.`,
+    person.relation ? `Contexte: ${person.relation}.` : "",
+    referenceDescription ? `Repères visuels: ${referenceDescription}.` : "",
+    "Style: ambiance Ghibli, doux, narratif, sans texte, cadrage portrait.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const ghibliBuffer = await generateImageBufferFromPrompt(prompt);
+  if (!ghibliBuffer) {
+    throw new Error(
+      "La génération en style Ghibli a échoué. Réessaie dans quelques instants."
+    );
+  }
+
+  const ghibliFilename = resolveEntityAvatarGhibliFilename(personId);
+  const ghibliPath = path.join(avatarsDir, ghibliFilename);
+  await writeFile(ghibliPath, ghibliBuffer);
+
+  const ghibliUrl = resolveEntityAvatarGhibliUrl("person", personId);
+  await updatePersonAvatarUrl(personId, ghibliUrl);
+
+  if (person.imageUrl !== ghibliUrl && person.imageUrl !== originalAvatarUrl) {
+    await removeStoredPersonAvatar(person.imageUrl);
+  }
+
+  revalidateApp();
+}
+
+export async function restorePersonAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const personId = cuidSchema.parse(formData.get("personId"));
+
+  const person = await requireHouseEntity(await loadPersonForAvatarActions(personId));
+  await requireOwner(userId, person.houseId);
+
+  if (!person.imageUrl) {
+    throw new Error("Aucun avatar à restaurer.");
+  }
+
+  const ghibliUrl = resolveEntityAvatarGhibliUrl("person", personId);
+  if (person.imageUrl !== ghibliUrl) {
+    return;
+  }
+
+  const originalAvatarUrl = await resolveEntityAvatarOriginalBackupUrl("person", personId);
+  if (!originalAvatarUrl) {
+    throw new Error("L'image d'origine est introuvable.");
+  }
+
+  await updatePersonAvatarUrl(personId, originalAvatarUrl);
+
+  await removeStoredPersonAvatar(ghibliUrl);
+  revalidateApp();
+}
+
+export async function removePersonAvatar(formData: FormData) {
+  const userId = await requireUser();
+  const personId = cuidSchema.parse(formData.get("personId"));
+
+  const person = await requireHouseEntity(await loadPersonForAvatarActions(personId));
+  await requireOwner(userId, person.houseId);
+
+  await updatePersonAvatarUrl(personId, null);
+
+  await removeStoredPersonAvatar(person.imageUrl);
+  await removeEntityAvatarGhibliArtifacts("person", personId);
   revalidateApp();
 }
 
@@ -1922,8 +3457,7 @@ export async function createTask(formData: FormData) {
 
   const title = nameSchema.parse(formData.get("title"));
   const description = optionalString.parse(formData.get("description")?.toString());
-  const dueDateRaw = formData.get("dueDate")?.toString();
-  const dueDate = dueDateRaw ? new Date(`${dueDateRaw}T12:00:00`) : null;
+  const dueDate = parseRequiredDateInput(formData.get("dueDate"), "L'échéance");
   const zoneId = await resolveRelationId(
     houseId,
     "zone",
@@ -1983,15 +3517,12 @@ export async function createTask(formData: FormData) {
   }
 
   if (recurrenceUnit) {
-    const normalizedDueDate = dueDate ?? new Date();
-    normalizedDueDate.setHours(12, 0, 0, 0);
-
     const template = await prisma.task.create({
       data: {
         houseId,
         title,
         description,
-        dueDate: normalizedDueDate,
+        dueDate,
         isTemplate: true,
         recurrenceUnit,
         recurrenceInterval: Number.isFinite(recurrenceInterval)
@@ -2017,7 +3548,7 @@ export async function createTask(formData: FormData) {
         houseId,
         title,
         description,
-        dueDate: normalizedDueDate,
+        dueDate,
         reminderOffsetDays:
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
@@ -2034,7 +3565,15 @@ export async function createTask(formData: FormData) {
       },
     });
 
-    await generateAndAttachTaskImage(instance.id, title, description);
+    await enqueueTaskIllustration({
+      houseId,
+      userId,
+      taskId: instance.id,
+      title,
+      description,
+      personId,
+      assigneeId: validAssigneeId,
+    });
   } else {
     const created = await prisma.task.create({
       data: {
@@ -2057,7 +3596,15 @@ export async function createTask(formData: FormData) {
       },
     });
 
-    await generateAndAttachTaskImage(created.id, title, description);
+    await enqueueTaskIllustration({
+      houseId,
+      userId,
+      taskId: created.id,
+      title,
+      description,
+      personId,
+      assigneeId: validAssigneeId,
+    });
   }
 
   revalidateApp();
@@ -2432,7 +3979,7 @@ export async function deleteTask(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true, isTemplate: true },
+    select: { houseId: true, isTemplate: true, imageUrl: true },
   });
 
   if (!task) {
@@ -2442,12 +3989,26 @@ export async function deleteTask(formData: FormData) {
   await requireMembership(userId, task.houseId);
 
   if (task.isTemplate) {
+    const seriesTasks = await prisma.task.findMany({
+      where: {
+        OR: [{ id: taskId }, { parentId: taskId }],
+      },
+      select: { id: true, imageUrl: true },
+    });
+
     await prisma.$transaction([
       prisma.task.deleteMany({ where: { parentId: taskId } }),
       prisma.task.delete({ where: { id: taskId } }),
     ]);
+
+    for (const seriesTask of seriesTasks) {
+      await removeStoredTaskImage(seriesTask.imageUrl);
+      await clearTaskImageGenerating(seriesTask.id);
+    }
   } else {
     await prisma.task.delete({ where: { id: taskId } });
+    await removeStoredTaskImage(task.imageUrl);
+    await clearTaskImageGenerating(taskId);
   }
 
   revalidateApp();
@@ -2634,11 +4195,13 @@ export async function applyTaskSuggestion(formData: FormData) {
       },
     });
 
-    await generateAndAttachTaskImage(
-      instance.id,
-      suggestion.title,
-      suggestion.description
-    );
+    await enqueueTaskIllustration({
+      houseId: suggestion.houseId,
+      userId,
+      taskId: instance.id,
+      title: suggestion.title,
+      description: suggestion.description,
+    });
   } else {
     const created = await prisma.task.create({
       data: {
@@ -2655,11 +4218,13 @@ export async function applyTaskSuggestion(formData: FormData) {
       },
     });
 
-    await generateAndAttachTaskImage(
-      created.id,
-      suggestion.title,
-      suggestion.description
-    );
+    await enqueueTaskIllustration({
+      houseId: suggestion.houseId,
+      userId,
+      taskId: created.id,
+      title: suggestion.title,
+      description: suggestion.description,
+    });
   }
 
   await prisma.taskSuggestion.delete({ where: { id: suggestionId } });

@@ -2,7 +2,7 @@ import {
   addShoppingListItem,
   createShoppingList,
 } from "@/app/actions";
-import { Plus } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react";
 import {
   formatEuroFromCents,
   getBudgetRuntimeDelegates,
@@ -110,9 +110,13 @@ export default async function ShoppingListsPage() {
   if (!shoppingListsReady) {
     return (
       <>
-        <header>
+        <header className="page-header">
+          <ShoppingCart
+            className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground"
+            aria-hidden="true"
+          />
           <p className="text-sm text-muted-foreground">Listes d&apos;achats</p>
-          <h1 className="text-2xl font-semibold">Courses et achats</h1>
+          <h1 className="text-2xl font-semibold sm:whitespace-nowrap">Courses et achats</h1>
         </header>
         <Card>
           <CardContent className="py-8 text-sm text-muted-foreground">
@@ -134,20 +138,24 @@ export default async function ShoppingListsPage() {
           type="checkbox"
           className="peer sr-only"
         />
-        <div className="flex items-start justify-between gap-3">
-          <header>
+        <header className="page-header flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <ShoppingCart
+              className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground"
+              aria-hidden="true"
+            />
             <p className="text-sm text-muted-foreground">Listes d&apos;achats</p>
-            <h1 className="text-2xl font-semibold">Courses et achats</h1>
-          </header>
+            <h1 className="text-2xl font-semibold sm:whitespace-nowrap">Courses et achats</h1>
+          </div>
           <label
             htmlFor="create-shopping-list"
-            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100"
+            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90"
             title="Créer une liste"
           >
             <Plus className="h-4 w-4" />
             <span className="sr-only">Créer une liste</span>
           </label>
-        </div>
+        </header>
         <div className="mt-4 hidden peer-checked:block">
           <Card>
             <CardHeader>

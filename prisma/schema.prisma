@@ -250,6 +250,7 @@ model Animal {
   houseId   String
   name      String
   species   String?
+  imageUrl  String?
   birthDate DateTime?
   notes     String?
   createdAt DateTime @default(now())
@@ -264,6 +265,7 @@ model Person {
   houseId      String
   name         String
   relation     String?
+  imageUrl     String?
   birthDate    DateTime?
   notes        String?
   createdAt    DateTime @default(now())

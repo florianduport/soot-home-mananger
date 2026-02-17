@@ -1,10 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TaskForm } from "@/components/tasks/task-form";
 import { TaskList } from "@/components/dashboard/task-list";
-import { Button } from "@/components/ui/button";
+import { TasksFiltersMenu } from "@/components/tasks/tasks-filters-menu";
 import { getHouseData, requireSession } from "@/lib/house";
-import { Plus, SlidersHorizontal } from "lucide-react";
-import Link from "next/link";
+import { resolveEquipmentImageUrl } from "@/lib/equipment-images";
+import { resolveProjectImageUrl } from "@/lib/project-images";
+import { resolveTaskImageGeneratingSet } from "@/lib/task-images";
+import { CheckSquare2, Plus } from "lucide-react";
 
 type TaskSearchParams = { [key: string]: string | string[] | undefined };
 
@@ -35,6 +37,17 @@ export default async function TasksPage({
   } = await getHouseData(session.user.id);
 
   const resolvedSearchParams = await resolveSearchParams(searchParams);
+  const generatingTaskIds = await resolveTaskImageGeneratingSet(tasks.map((task) => task.id));
+  const projectImageEntries = await Promise.all(
+    projects.map(async (project) => [project.id, await resolveProjectImageUrl(project.id)] as const)
+  );
+  const equipmentImageEntries = await Promise.all(
+    equipments.map(
+      async (equipment) => [equipment.id, await resolveEquipmentImageUrl(equipment.id)] as const
+    )
+  );
+  const projectImageMap = new Map<string, string | null>(projectImageEntries);
+  const equipmentImageMap = new Map<string, string | null>(equipmentImageEntries);
 
   const queryValue = (resolvedSearchParams.q ?? "").toString();
   const query = queryValue.toLowerCase();
@@ -62,15 +75,21 @@ export default async function TasksPage({
     status: task.status,
     dueDate: task.dueDate ? task.dueDate.toISOString() : null,
     imageUrl: task.imageUrl ?? null,
+    isImageGenerating: generatingTaskIds.has(task.id),
     zone: task.zone?.name ?? null,
     category: task.category?.name ?? null,
     project: task.project?.name ?? null,
+    projectImageUrl: task.projectId ? projectImageMap.get(task.projectId) ?? null : null,
     equipment: task.equipment?.name ?? null,
+    equipmentImageUrl: task.equipmentId ? equipmentImageMap.get(task.equipmentId) ?? null : null,
     animal: task.animal?.name ?? null,
+    animalImageUrl: task.animal?.imageUrl ?? null,
     person: task.person?.name ?? null,
+    personImageUrl: task.person?.imageUrl ?? null,
     recurring: Boolean(task.parentId),
     assignee: task.assignee?.name ?? task.assignee?.email ?? null,
     assigneeId: task.assigneeId ?? null,
+    assigneeImageUrl: task.assignee?.image ?? null,
   }));
 
   const filtered = taskItems.filter((task) => {
@@ -103,20 +122,24 @@ export default async function TasksPage({
     <>
       <section>
         <input id="create-task" type="checkbox" className="peer sr-only" />
-        <div className="flex items-start justify-between gap-3">
-          <header>
+        <header className="page-header flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <CheckSquare2
+              className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground"
+              aria-hidden="true"
+            />
             <p className="text-sm text-muted-foreground">Tâches</p>
-            <h1 className="text-2xl font-semibold">Toutes les tâches</h1>
-          </header>
+            <h1 className="text-2xl font-semibold sm:whitespace-nowrap">Toutes les tâches</h1>
+          </div>
           <label
             htmlFor="create-task"
-            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100"
+            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90"
             title="Créer une tâche"
           >
             <Plus className="h-4 w-4" />
             <span className="sr-only">Créer une tâche</span>
           </label>
-        </div>
+        </header>
         <div className="mt-4 hidden peer-checked:block">
           <Card>
             <CardHeader>
@@ -125,10 +148,17 @@ export default async function TasksPage({
             <CardContent>
               <TaskForm
                 houseId={houseId}
+                currentUserId={session.user.id}
                 zones={zones}
                 categories={categories}
-                projects={projects}
-                equipments={equipments}
+                projects={projects.map((project) => ({
+                  ...project,
+                  imageUrl: projectImageMap.get(project.id) ?? null,
+                }))}
+                equipments={equipments.map((equipment) => ({
+                  ...equipment,
+                  imageUrl: equipmentImageMap.get(equipment.id) ?? null,
+                }))}
                 animals={animals}
                 people={people}
                 members={members.map((member) => member.user)}
@@ -141,90 +171,24 @@ export default async function TasksPage({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Liste complète</CardTitle>
-          <details className="group relative">
-            <summary
-              className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
-              title="Filtres tâches"
-              aria-label="Filtres tâches"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-            </summary>
-            <div className="absolute right-0 z-20 mt-2 w-[min(90vw,340px)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-              <form method="get" className="grid gap-2">
-                <input
-                  name="q"
-                  placeholder="Rechercher..."
-                  defaultValue={queryValue}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                />
-                <select
-                  name="timeframe"
-                  defaultValue={timeframeFilter}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <option value="all">Période: toutes les tâches</option>
-                  <option value="window_1m">Période: ± 1 mois</option>
-                  <option value="next_month">Période: mois prochain</option>
-                  <option value="next_3m">Période: 3 mois</option>
-                  <option value="next_6m">Période: 6 mois</option>
-                </select>
-                <select
-                  name="status"
-                  defaultValue={statusFilter}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <option value="">Statut</option>
-                  <option value="TODO">À faire</option>
-                  <option value="IN_PROGRESS">En cours</option>
-                  <option value="DONE">Terminé</option>
-                </select>
-                <select
-                  name="zone"
-                  defaultValue={zoneFilter}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <option value="">Zone</option>
-                  {zones.map((zone) => (
-                    <option key={zone.id} value={zone.name}>
-                      {zone.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  name="category"
-                  defaultValue={categoryFilter}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <option value="">Catégorie</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.name}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  name="assignee"
-                  defaultValue={assigneeFilter}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <option value="">Assigné</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.userId}>
-                      {member.user.name || member.user.email || "Membre"}
-                    </option>
-                  ))}
-                </select>
-                <div className="mt-1 flex items-center justify-end gap-2">
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href="/app/tasks">Réinitialiser</Link>
-                  </Button>
-                  <Button type="submit" variant="outline" size="sm">
-                    Appliquer
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </details>
+          <TasksFiltersMenu
+            queryValue={queryValue}
+            timeframeFilter={timeframeFilter}
+            statusFilter={statusFilter}
+            zoneFilter={zoneFilter}
+            categoryFilter={categoryFilter}
+            assigneeFilter={assigneeFilter}
+            zones={zones.map((zone) => ({ id: zone.id, label: zone.name }))}
+            categories={categories.map((category) => ({
+              id: category.id,
+              label: category.name,
+            }))}
+            assignees={members.map((member) => ({
+              id: member.userId,
+              label: member.user.name || member.user.email || "Membre",
+              imageUrl: member.user.image,
+            }))}
+          />
         </CardHeader>
         <CardContent>
           <TaskList tasks={filtered} members={members.map((member) => member.user)} />

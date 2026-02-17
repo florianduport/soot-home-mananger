@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { updateTaskAssignee } from "@/app/actions";
+import { AvatarSelect } from "@/components/ui/avatar-select";
 
 type TaskAssigneeSelectProps = {
   taskId: string;
@@ -10,6 +11,7 @@ type TaskAssigneeSelectProps = {
     id: string;
     name: string | null;
     email: string | null;
+    image?: string | null;
   }>;
 };
 
@@ -23,21 +25,22 @@ export function TaskAssigneeSelect({
   return (
     <form ref={formRef} action={updateTaskAssignee} className="w-full sm:w-auto">
       <input type="hidden" name="taskId" value={taskId} />
-      <select
+      <AvatarSelect
         name="assigneeId"
         defaultValue={assigneeId ?? ""}
-        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] sm:w-auto"
-        onChange={() => {
-          formRef.current?.requestSubmit();
+        emptyLabel="Non assignée"
+        triggerClassName="w-full sm:w-auto"
+        options={members.map((member) => ({
+          value: member.id,
+          label: member.name || member.email || "Membre",
+          imageUrl: member.image ?? null,
+        }))}
+        onValueChange={() => {
+          window.requestAnimationFrame(() => {
+            formRef.current?.requestSubmit();
+          });
         }}
-      >
-        <option value="">Non assignée</option>
-        {members.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.name || member.email || "Membre"}
-          </option>
-        ))}
-      </select>
+      />
     </form>
   );
 }

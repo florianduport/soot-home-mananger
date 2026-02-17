@@ -3,29 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import {
-  createAnimal,
-  createCategory,
   createHouseInvite,
-  createImportantDate,
-  createPerson,
-  createZone,
-  deleteAnimal,
-  deleteCategory,
-  deleteImportantDate,
-  deletePerson,
-  deleteZone,
   removeHouseMember,
   revokeHouseInvite,
-  updateAnimal,
-  updateCategory,
-  updateImportantDate,
-  updatePerson,
-  updateZone,
 } from "@/app/actions";
 import { getHouseData, requireSession } from "@/lib/house";
-import { getNextImportantDateOccurrence } from "@/lib/important-dates";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { ThemeSettings } from "@/components/settings/theme-settings";
+import { BackgroundSettings } from "@/components/settings/background-settings";
 import { HouseIconUpload } from "@/components/houses/house-icon-upload";
+import { SettingsEntityManager } from "@/components/settings/settings-entity-manager";
+import { SettingsImportantDatesManager } from "@/components/settings/settings-important-dates-manager";
+import { Settings } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
   PENDING: "En attente",
@@ -34,21 +22,10 @@ const statusLabels: Record<string, string> = {
   EXPIRED: "Expirée",
 };
 
-const importantDateTypeLabels: Record<string, string> = {
-  BIRTHDAY: "Anniversaire",
-  ANNIVERSARY: "Commémoration",
-  EVENT: "Événement",
-  OTHER: "Autre",
-};
-
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "medium",
   }).format(value);
-}
-
-function dateInputValue(value: Date) {
-  return value.toISOString().slice(0, 10);
 }
 
 export default async function SettingsPage() {
@@ -67,19 +44,13 @@ export default async function SettingsPage() {
     await getHouseData(session.user.id);
   const houseIconUrl = membership.house.iconUrl;
   const canEditHouse = membership.role === "OWNER";
-  const sortedImportantDates = [...importantDates].sort((a, b) => {
-    const aNext = getNextImportantDateOccurrence(a.date, a.isRecurringYearly);
-    const bNext = getNextImportantDateOccurrence(b.date, b.isRecurringYearly);
-    const delta = aNext.getTime() - bNext.getTime();
-    if (delta !== 0) return delta;
-    return a.title.localeCompare(b.title, "fr");
-  });
 
   return (
     <>
-      <header>
+      <header className="page-header">
+        <Settings className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground" aria-hidden="true" />
         <p className="text-sm text-muted-foreground">Réglages</p>
-        <h1 className="text-2xl font-semibold">Organisation de la maison</h1>
+        <h1 className="text-2xl font-semibold sm:whitespace-nowrap">Organisation de la maison</h1>
       </header>
 
       <section className="grid gap-6 lg:grid-cols-2">
@@ -87,8 +58,9 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Apparence</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ThemeToggle />
+          <CardContent className="space-y-4">
+            <ThemeSettings />
+            <BackgroundSettings />
           </CardContent>
         </Card>
 
@@ -208,348 +180,61 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Zones</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form action={createZone} className="flex flex-col gap-2 sm:flex-row">
-              <input type="hidden" name="houseId" value={houseId} />
-              <Input name="name" placeholder="Garage" className="w-full sm:flex-1" required />
-              <Button type="submit" variant="outline" className="w-full sm:w-auto">
-                Ajouter
-              </Button>
-            </form>
-            <div className="space-y-2 text-sm">
-              {zones.map((zone) => (
-                <div key={zone.id} className="flex flex-wrap items-stretch gap-2 sm:items-center">
-                  <form
-                    action={updateZone}
-                    className="flex w-full flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap"
-                  >
-                    <input type="hidden" name="zoneId" value={zone.id} />
-                    <Input
-                      name="name"
-                      defaultValue={zone.name}
-                      className="w-full sm:flex-1"
-                      required
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Modifier
-                    </Button>
-                  </form>
-                  <form action={deleteZone}>
-                    <input type="hidden" name="zoneId" value={zone.id} />
-                    <Button
-                      type="submit"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Supprimer
-                    </Button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsEntityManager
+          type="zone"
+          title="Zones"
+          houseId={houseId}
+          items={zones.map((zone) => ({ id: zone.id, name: zone.name }))}
+          primaryPlaceholder="Garage"
+        />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Catégories</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form action={createCategory} className="flex flex-col gap-2 sm:flex-row">
-              <input type="hidden" name="houseId" value={houseId} />
-              <Input
-                name="name"
-                placeholder="Entretien"
-                className="w-full sm:flex-1"
-                required
-              />
-              <Button type="submit" variant="outline" className="w-full sm:w-auto">
-                Ajouter
-              </Button>
-            </form>
-            <div className="space-y-2 text-sm">
-              {categories.map((category) => (
-                <div
-                  key={category.id}
-                  className="flex flex-wrap items-stretch gap-2 sm:items-center"
-                >
-                  <form
-                    action={updateCategory}
-                    className="flex w-full flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap"
-                  >
-                    <input type="hidden" name="categoryId" value={category.id} />
-                    <Input
-                      name="name"
-                      defaultValue={category.name}
-                      className="w-full sm:flex-1"
-                      required
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Modifier
-                    </Button>
-                  </form>
-                  <form action={deleteCategory}>
-                    <input type="hidden" name="categoryId" value={category.id} />
-                    <Button
-                      type="submit"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Supprimer
-                    </Button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsEntityManager
+          type="category"
+          title="Catégories"
+          houseId={houseId}
+          items={categories.map((category) => ({ id: category.id, name: category.name }))}
+          primaryPlaceholder="Entretien"
+        />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Animaux</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form action={createAnimal} className="grid gap-2">
-              <input type="hidden" name="houseId" value={houseId} />
-              <Input name="name" placeholder="Nala" required />
-              <Input name="species" placeholder="Chat" />
-              <Button type="submit" variant="outline" className="w-full sm:w-auto">
-                Ajouter
-              </Button>
-            </form>
-            <div className="space-y-2 text-sm">
-              {animals.map((animal) => (
-                <div key={animal.id} className="flex flex-wrap items-stretch gap-2 sm:items-center">
-                  <form
-                    action={updateAnimal}
-                    className="grid w-full gap-2 sm:flex-1 sm:grid-cols-[1.2fr,1fr,auto]"
-                  >
-                    <input type="hidden" name="animalId" value={animal.id} />
-                    <Input name="name" defaultValue={animal.name} required />
-                    <Input name="species" defaultValue={animal.species ?? ""} />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Modifier
-                    </Button>
-                  </form>
-                  <form action={deleteAnimal}>
-                    <input type="hidden" name="animalId" value={animal.id} />
-                    <Button
-                      type="submit"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Supprimer
-                    </Button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsEntityManager
+          type="animal"
+          title="Animaux"
+          houseId={houseId}
+          items={animals.map((animal) => ({
+            id: animal.id,
+            name: animal.name,
+            secondary: animal.species,
+            imageUrl: animal.imageUrl,
+          }))}
+          primaryPlaceholder="Nala"
+          secondaryPlaceholder="Chat"
+        />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Personnes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form action={createPerson} className="grid gap-2">
-              <input type="hidden" name="houseId" value={houseId} />
-              <Input name="name" placeholder="Enfant" required />
-              <Input name="relation" placeholder="Fils" />
-              <Button type="submit" variant="outline" className="w-full sm:w-auto">
-                Ajouter
-              </Button>
-            </form>
-            <div className="space-y-2 text-sm">
-              {people.map((person) => (
-                <div key={person.id} className="flex flex-wrap items-stretch gap-2 sm:items-center">
-                  <form
-                    action={updatePerson}
-                    className="grid w-full gap-2 sm:flex-1 sm:grid-cols-[1.2fr,1fr,auto]"
-                  >
-                    <input type="hidden" name="personId" value={person.id} />
-                    <Input name="name" defaultValue={person.name} required />
-                    <Input
-                      name="relation"
-                      defaultValue={person.relation ?? ""}
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Modifier
-                    </Button>
-                  </form>
-                  <form action={deletePerson}>
-                    <input type="hidden" name="personId" value={person.id} />
-                    <Button
-                      type="submit"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      Supprimer
-                    </Button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsEntityManager
+          type="person"
+          title="Personnes"
+          houseId={houseId}
+          items={people.map((person) => ({
+            id: person.id,
+            name: person.name,
+            secondary: person.relation,
+            imageUrl: person.imageUrl,
+          }))}
+          primaryPlaceholder="Enfant"
+          secondaryPlaceholder="Fils"
+        />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Dates importantes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form action={createImportantDate} className="grid gap-2">
-              <input type="hidden" name="houseId" value={houseId} />
-              <Input name="title" placeholder="Anniversaire de Léa" required />
-              <select
-                name="type"
-                defaultValue="BIRTHDAY"
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="BIRTHDAY">Anniversaire</option>
-                <option value="ANNIVERSARY">Commémoration</option>
-                <option value="EVENT">Événement</option>
-                <option value="OTHER">Autre</option>
-              </select>
-              <Input name="date" type="date" required />
-              <select
-                name="isRecurringYearly"
-                defaultValue="true"
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="true">Répéter chaque année</option>
-                <option value="false">Date unique</option>
-              </select>
-              <Input name="description" placeholder="Optionnel: dîner en famille" />
-              <Button type="submit" variant="outline" className="w-full sm:w-auto">
-                Ajouter
-              </Button>
-            </form>
-
-            <div className="space-y-2 text-sm">
-              {sortedImportantDates.length ? (
-                sortedImportantDates.map((importantDate) => {
-                  const nextOccurrence = getNextImportantDateOccurrence(
-                    importantDate.date,
-                    importantDate.isRecurringYearly
-                  );
-
-                  return (
-                    <div
-                      key={importantDate.id}
-                      className="flex flex-wrap items-stretch gap-2 sm:items-center"
-                    >
-                      <form
-                        action={updateImportantDate}
-                        className="grid w-full gap-2 sm:flex-1 sm:grid-cols-[1.2fr,1fr,1fr,1fr,auto]"
-                      >
-                        <input
-                          type="hidden"
-                          name="importantDateId"
-                          value={importantDate.id}
-                        />
-                        <Input
-                          name="title"
-                          defaultValue={importantDate.title}
-                          required
-                        />
-                        <select
-                          name="type"
-                          defaultValue={importantDate.type}
-                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          <option value="BIRTHDAY">Anniversaire</option>
-                          <option value="ANNIVERSARY">Commémoration</option>
-                          <option value="EVENT">Événement</option>
-                          <option value="OTHER">Autre</option>
-                        </select>
-                        <Input
-                          name="date"
-                          type="date"
-                          defaultValue={dateInputValue(importantDate.date)}
-                          required
-                        />
-                        <select
-                          name="isRecurringYearly"
-                          defaultValue={importantDate.isRecurringYearly ? "true" : "false"}
-                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          <option value="true">Annuel</option>
-                          <option value="false">Unique</option>
-                        </select>
-                        <Button
-                          type="submit"
-                          variant="outline"
-                          size="sm"
-                          className="w-full sm:w-auto"
-                        >
-                          Modifier
-                        </Button>
-                        <Input
-                          name="description"
-                          defaultValue={importantDate.description ?? ""}
-                          placeholder="Description (optionnel)"
-                          className="sm:col-span-4"
-                        />
-                        <p className="sm:col-span-4 text-xs text-muted-foreground">
-                          Type: {importantDateTypeLabels[importantDate.type] ?? "Autre"} ·
-                          Prochaine occurrence: {formatDate(nextOccurrence)}
-                        </p>
-                      </form>
-                      <form action={deleteImportantDate}>
-                        <input
-                          type="hidden"
-                          name="importantDateId"
-                          value={importantDate.id}
-                        />
-                        <Button
-                          type="submit"
-                          variant="ghost"
-                          size="sm"
-                          className="w-full sm:w-auto"
-                        >
-                          Supprimer
-                        </Button>
-                      </form>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Aucune date importante pour le moment.
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsImportantDatesManager
+          houseId={houseId}
+          items={importantDates.map((importantDate) => ({
+            id: importantDate.id,
+            title: importantDate.title,
+            type: importantDate.type,
+            date: importantDate.date,
+            isRecurringYearly: importantDate.isRecurringYearly,
+            description: importantDate.description,
+          }))}
+        />
       </section>
     </>
   );

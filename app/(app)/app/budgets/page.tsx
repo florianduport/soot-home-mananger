@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Landmark } from "lucide-react";
 import {
   deleteBudgetEntry,
 } from "@/app/actions";
@@ -59,6 +59,10 @@ function dateInputLabel(date: Date) {
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(date);
+}
+
+function formatExpenseEuroFromCents(amountCents: number) {
+  return `-${formatEuroFromCents(Math.abs(amountCents))}`;
 }
 
 function sourceLabel(source: BudgetListItem["source"]) {
@@ -187,9 +191,10 @@ export default async function BudgetsPage({
   if (budgetUnavailableMessage) {
     return (
       <>
-        <header>
+        <header className="page-header">
+          <Landmark className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">Budgets</p>
-          <h1 className="text-2xl font-semibold">Gestion mensuelle</h1>
+          <h1 className="text-2xl font-semibold sm:whitespace-nowrap">Gestion mensuelle</h1>
         </header>
         <Card>
           <CardContent className="py-8 text-sm text-muted-foreground">
@@ -232,29 +237,40 @@ export default async function BudgetsPage({
     return a.occurredOn.getTime() - b.occurredOn.getTime();
   });
 
-  const incomes = monthlyItems.filter((item) => item.type === "INCOME");
-  const expenses = monthlyItems.filter((item) => item.type === "EXPENSE");
+  const nonZeroMonthlyItems = monthlyItems.filter((item) => item.amountCents > 0);
+  const incomes = nonZeroMonthlyItems.filter((item) => item.type === "INCOME");
+  const expenses = nonZeroMonthlyItems.filter((item) => item.type === "EXPENSE");
   const totalIncomeCents = incomes.reduce((sum, item) => sum + item.amountCents, 0);
   const totalExpenseCents = expenses.reduce((sum, item) => sum + item.amountCents, 0);
   const totalForecastExpenseCents = expenses
     .filter((item) => item.isForecast)
     .reduce((sum, item) => sum + item.amountCents, 0);
   const balanceCents = totalIncomeCents - totalExpenseCents;
+  const halfBalanceCents = balanceCents / 2;
+  const expenseAmountColorClass = (amountCents: number) => {
+    if (amountCents < halfBalanceCents) return "text-emerald-600";
+    if (amountCents <= balanceCents) return "text-amber-500";
+    return "text-rose-600";
+  };
 
   return (
     <>
       <section className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-3">
-          <header>
+        <header className="page-header flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <Landmark
+              className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground"
+              aria-hidden="true"
+            />
             <p className="text-sm text-muted-foreground">Budgets</p>
-            <h1 className="text-2xl font-semibold">Gestion mensuelle</h1>
-          </header>
+            <h1 className="text-2xl font-semibold sm:whitespace-nowrap">Gestion mensuelle</h1>
+          </div>
           <BudgetActionsMenu
             houseId={houseId}
             selectedMonth={selectedMonth}
             defaultEntryDate={defaultEntryDate}
           />
-        </div>
+        </header>
         <div className="flex w-full items-center justify-center gap-2">
           <div className="flex min-w-0 w-full items-center gap-2 sm:max-w-[260px]">
             <Button asChild variant="outline" size="icon" className="rounded-full">
@@ -289,7 +305,7 @@ export default async function BudgetsPage({
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Revenus {formatEuroFromCents(totalIncomeCents)} • Dépenses{" "}
-              {formatEuroFromCents(totalExpenseCents)}
+              {formatExpenseEuroFromCents(totalExpenseCents)}
             </p>
           </CardContent>
         </Card>
@@ -299,11 +315,13 @@ export default async function BudgetsPage({
             <CardTitle>Dépenses</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold text-rose-600">
-              {formatEuroFromCents(totalExpenseCents)}
+            <p className={`text-2xl font-semibold ${expenseAmountColorClass(totalExpenseCents)}`}>
+              {formatExpenseEuroFromCents(totalExpenseCents)}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Anticipées: {formatEuroFromCents(totalForecastExpenseCents)}
+            <p
+              className={`mt-2 text-xs ${expenseAmountColorClass(totalForecastExpenseCents)}`}
+            >
+              Anticipées: {formatExpenseEuroFromCents(totalForecastExpenseCents)}
             </p>
 
             {expenses.length ? (
@@ -338,8 +356,10 @@ export default async function BudgetsPage({
                         ) : null}
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <p className="font-semibold text-rose-600">
-                          {formatEuroFromCents(item.amountCents)}
+                        <p
+                          className={`font-semibold ${expenseAmountColorClass(item.amountCents)}`}
+                        >
+                          {formatExpenseEuroFromCents(item.amountCents)}
                         </p>
                         {item.persisted ? (
                           <form action={deleteBudgetEntry}>

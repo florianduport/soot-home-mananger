@@ -9,33 +9,45 @@ import {
   Trash2,
   UserRound,
   Pencil,
+  Upload,
   X,
 } from "lucide-react";
-import { deleteTask, regenerateTaskImage, updateTaskAssignee } from "@/app/actions";
+import {
+  deleteTask,
+  regenerateTaskImage,
+  updateTaskAssignee,
+  uploadTaskImage,
+} from "@/app/actions";
+import { AvatarSelect } from "@/components/ui/avatar-select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useCloseDetailsOnOutside } from "@/components/ui/use-close-details-on-outside";
 
 type TaskDetailActionsMenuProps = {
   taskId: string;
   isEditMode: boolean;
   assigneeId?: string | null;
   hasImage?: boolean;
+  isImageGenerating?: boolean;
   members: Array<{
     userId: string;
     name: string | null;
     email: string | null;
+    image?: string | null;
   }>;
 };
 
 const triggerClassName =
-  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100";
+  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90";
 const menuItemClassName =
-  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100";
+  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-primary-foreground hover:bg-sidebar-primary-foreground/10";
 
 export function TaskDetailActionsMenu({
   taskId,
   isEditMode,
   assigneeId,
   hasImage,
+  isImageGenerating = false,
   members,
 }: TaskDetailActionsMenuProps) {
   const router = useRouter();
@@ -43,6 +55,8 @@ export function TaskDetailActionsMenu({
   const searchParams = useSearchParams();
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  useCloseDetailsOnOutside(detailsRef);
 
   function toggleEditMode() {
     const nextParams = new URLSearchParams(searchParams?.toString() ?? "");
@@ -66,6 +80,15 @@ export function TaskDetailActionsMenu({
     setAssignOpen(false);
   }
 
+  function openUploadModal() {
+    setUploadOpen(true);
+    detailsRef.current?.removeAttribute("open");
+  }
+
+  function closeUploadModal() {
+    setUploadOpen(false);
+  }
+
   function confirmDelete(event: FormEvent<HTMLFormElement>) {
     const confirmed = window.confirm(
       "Supprimer cette tâche ? Cette action est irréversible."
@@ -79,7 +102,7 @@ export function TaskDetailActionsMenu({
 
   return (
     <>
-      <details ref={detailsRef} className="group relative">
+      <details ref={detailsRef} className="action-menu group relative">
         <summary
           className={`${triggerClassName} list-none [&::-webkit-details-marker]:hidden`}
           title="Actions de la tâche"
@@ -88,7 +111,7 @@ export function TaskDetailActionsMenu({
           <MoreHorizontal className="h-4 w-4" />
         </summary>
 
-        <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+        <div className="action-menu-popover absolute right-0 z-[999] mt-2 w-56 rounded-xl border border-sidebar-primary bg-sidebar-primary p-2 text-sidebar-primary-foreground shadow-xl">
           <button type="button" className={menuItemClassName} onClick={toggleEditMode}>
             <Pencil className="h-4 w-4" />
             {isEditMode ? "Fermer l'édition" : "Modifier la tâche"}
@@ -96,11 +119,23 @@ export function TaskDetailActionsMenu({
 
           <form action={regenerateTaskImage}>
             <input type="hidden" name="taskId" value={taskId} />
-            <button type="submit" className={menuItemClassName}>
+            <button
+              type="submit"
+              className={menuItemClassName}
+            >
               <RefreshCcw className="h-4 w-4" />
-              {hasImage ? "Régénérer l’illustration" : "Générer l’illustration"}
+              {isImageGenerating
+                ? "Génération..."
+                : hasImage
+                  ? "Régénérer l’illustration"
+                  : "Générer l’illustration"}
             </button>
           </form>
+
+          <button type="button" className={menuItemClassName} onClick={openUploadModal}>
+            <Upload className="h-4 w-4" />
+            {hasImage ? "Changer l’image" : "Téléverser une image"}
+          </button>
 
           <button type="button" className={menuItemClassName} onClick={openAssignModal}>
             <UserRound className="h-4 w-4" />
@@ -122,7 +157,7 @@ export function TaskDetailActionsMenu({
 
       {assignOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border border-sidebar-primary bg-sidebar-primary p-4 text-sidebar-primary-foreground shadow-2xl">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold">Assigner la tâche</h3>
               <button
@@ -138,24 +173,57 @@ export function TaskDetailActionsMenu({
 
             <form action={updateTaskAssignee} className="mt-4 space-y-3">
               <input type="hidden" name="taskId" value={taskId} />
-              <select
+              <AvatarSelect
                 name="assigneeId"
                 defaultValue={assigneeId ?? ""}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              >
-                <option value="">Non assignée</option>
-                {members.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {member.name || member.email || "Membre"}
-                  </option>
-                ))}
-              </select>
+                emptyLabel="Non assignée"
+                options={members.map((member) => ({
+                  value: member.userId,
+                  label: member.name || member.email || "Membre",
+                  imageUrl: member.image ?? null,
+                }))}
+              />
               <div className="flex items-center justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={closeAssignModal}>
                   Annuler
                 </Button>
                 <Button type="submit" variant="add">
                   Valider
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {uploadOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-sidebar-primary bg-sidebar-primary p-4 text-sidebar-primary-foreground shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold">Illustration de la tâche</h3>
+              <button
+                type="button"
+                onClick={closeUploadModal}
+                className={triggerClassName}
+                title="Fermer"
+                aria-label="Fermer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form action={uploadTaskImage} className="mt-4 space-y-3">
+              <input type="hidden" name="taskId" value={taskId} />
+              <Input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" required />
+              <p className="text-xs text-muted-foreground">
+                PNG, JPG, WEBP ou GIF. Taille max: 8 Mo.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={closeUploadModal}>
+                  Annuler
+                </Button>
+                <Button type="submit" variant="add">
+                  Enregistrer
                 </Button>
               </div>
             </form>

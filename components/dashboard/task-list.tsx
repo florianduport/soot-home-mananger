@@ -3,6 +3,8 @@ import Link from "next/link";
 import { StatusToggle } from "@/components/tasks/status-toggle";
 import { TaskAssigneeSelect } from "@/components/tasks/task-assignee-select";
 import { TaskCompleteMessage } from "@/components/tasks/task-complete-message";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { IllustrationPlaceholder } from "@/components/ui/illustration-placeholder";
 
 export type TaskListItem = {
   id: string;
@@ -12,19 +14,26 @@ export type TaskListItem = {
   zone?: string | null;
   category?: string | null;
   project?: string | null;
+  projectImageUrl?: string | null;
   equipment?: string | null;
+  equipmentImageUrl?: string | null;
   animal?: string | null;
+  animalImageUrl?: string | null;
   person?: string | null;
+  personImageUrl?: string | null;
   recurring?: boolean;
   assignee?: string | null;
   assigneeId?: string | null;
+  assigneeImageUrl?: string | null;
   imageUrl?: string | null;
+  isImageGenerating?: boolean;
 };
 
 export type TaskMember = {
   id: string;
   name: string | null;
   email: string | null;
+  image?: string | null;
 };
 
 const statusLabels: Record<TaskListItem["status"], string> = {
@@ -63,27 +72,28 @@ export function TaskList({
       {tasks.map((task) => (
         <div
           key={task.id}
-          className={`relative flex flex-col gap-3 rounded-xl border bg-card p-3 sm:p-4 ${
+          className={`relative flex min-w-0 items-stretch gap-3 rounded-xl border bg-card p-3 sm:p-4 ${
             task.status === "DONE" ? "opacity-70" : ""
           }`}
         >
           <TaskCompleteMessage taskId={task.id} />
-          <div className="flex min-w-0 items-start gap-3">
-            <StatusToggle
-              taskId={task.id}
-              done={task.status === "DONE"}
-              className="mt-1 shrink-0 self-center"
+          <StatusToggle
+            taskId={task.id}
+            done={task.status === "DONE"}
+            className="shrink-0 self-center"
+          />
+          {task.isImageGenerating ? (
+            <IllustrationPlaceholder
+              className="h-full w-24 shrink-0 self-stretch rounded-xl"
+              showLabel={false}
             />
-            {task.imageUrl ? (
-              <div className="flex h-full shrink-0 items-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={task.imageUrl}
-                  alt=""
-                  className="h-16 w-16 rounded-xl object-cover"
-                />
-              </div>
-            ) : null}
+          ) : task.imageUrl ? (
+            <div className="w-24 shrink-0 self-stretch overflow-hidden rounded-xl">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={task.imageUrl} alt="" className="h-full w-full object-cover" />
+            </div>
+          ) : null}
+          <div className="min-w-0 flex-1 space-y-3">
             <div className="min-w-0">
               <Link
                 href={`/app/tasks/${task.id}`}
@@ -103,33 +113,83 @@ export function TaskList({
                 {task.recurring ? <Badge variant="outline">Récurrente</Badge> : null}
               </div>
             </div>
+            {(task.zone ||
+              task.category ||
+              task.project ||
+              task.equipment ||
+              task.animal ||
+              task.person ||
+              task.assignee) && (
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {task.zone ? <span>Zone: {task.zone}</span> : null}
+                {task.category ? <span>Catégorie: {task.category}</span> : null}
+                {task.project ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>Projet:</span>
+                    <EntityAvatar
+                      name={task.project}
+                      imageUrl={task.projectImageUrl}
+                      size="xs"
+                    />
+                    <span>{task.project}</span>
+                  </span>
+                ) : null}
+                {task.equipment ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>Équipement:</span>
+                    <EntityAvatar
+                      name={task.equipment}
+                      imageUrl={task.equipmentImageUrl}
+                      size="xs"
+                    />
+                    <span>{task.equipment}</span>
+                  </span>
+                ) : null}
+                {task.animal ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>Animal:</span>
+                    <EntityAvatar
+                      name={task.animal}
+                      imageUrl={task.animalImageUrl}
+                      size="xs"
+                    />
+                    <span>{task.animal}</span>
+                  </span>
+                ) : null}
+                {task.person ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>Personne:</span>
+                    <EntityAvatar
+                      name={task.person}
+                      imageUrl={task.personImageUrl}
+                      size="xs"
+                    />
+                    <span>{task.person}</span>
+                  </span>
+                ) : null}
+                {task.assignee ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>Assignée à:</span>
+                    <EntityAvatar
+                      name={task.assignee}
+                      imageUrl={task.assigneeImageUrl}
+                      size="xs"
+                    />
+                    <span>{task.assignee}</span>
+                  </span>
+                ) : null}
+              </div>
+            )}
+            {showAssigneeControls ? (
+              <div className="flex gap-3">
+                <TaskAssigneeSelect
+                  taskId={task.id}
+                  assigneeId={task.assigneeId}
+                  members={members}
+                />
+              </div>
+            ) : null}
           </div>
-          {(task.zone ||
-            task.category ||
-            task.project ||
-            task.equipment ||
-            task.animal ||
-            task.person ||
-            task.assignee) && (
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {task.zone ? <span>Zone: {task.zone}</span> : null}
-              {task.category ? <span>Catégorie: {task.category}</span> : null}
-              {task.project ? <span>Projet: {task.project}</span> : null}
-              {task.equipment ? <span>Équipement: {task.equipment}</span> : null}
-              {task.animal ? <span>Animal: {task.animal}</span> : null}
-              {task.person ? <span>Personne: {task.person}</span> : null}
-              {task.assignee ? <span>Assignée à: {task.assignee}</span> : null}
-            </div>
-          )}
-          {showAssigneeControls ? (
-            <div className="flex gap-3">
-              <TaskAssigneeSelect
-                taskId={task.id}
-                assigneeId={task.assigneeId}
-                members={members}
-              />
-            </div>
-          ) : null}
         </div>
       ))}
     </div>

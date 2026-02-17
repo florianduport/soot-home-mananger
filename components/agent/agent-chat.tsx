@@ -105,6 +105,7 @@ export function AgentChat() {
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const dragDepthRef = useRef(0);
 
   const activeConversation = useMemo(
@@ -179,6 +180,18 @@ export function AgentChat() {
       setConversationSearch("");
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || isMobileHistoryOpen) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      composerInputRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isOpen, isMobileHistoryOpen]);
 
   useEffect(() => {
     if (!isOpen || !activeConversationId) {
@@ -296,6 +309,26 @@ export function AgentChat() {
     const files = Array.from(event.target.files || []);
     event.target.value = "";
     appendComposerFiles(files);
+  }
+
+  function handleComposerPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const clipboardFiles = Array.from(event.clipboardData.files || []).filter((file) =>
+      file.type.startsWith("image/")
+    );
+
+    if (clipboardFiles.length) {
+      appendComposerFiles(clipboardFiles);
+      return;
+    }
+
+    const itemFiles = Array.from(event.clipboardData.items || [])
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+
+    if (itemFiles.length) {
+      appendComposerFiles(itemFiles);
+    }
   }
 
   function handleDragEnter(event: React.DragEvent<HTMLDivElement>) {
@@ -470,7 +503,7 @@ export function AgentChat() {
       <button
         type="button"
         onClick={() => setIsOpen((previous) => !previous)}
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-lg transition-colors hover:bg-slate-100 sm:right-6 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] dark:border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-lg transition-colors hover:bg-sidebar-primary/90 sm:right-6 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]"
         title="Ouvrir l'agent IA"
       >
         <MessageCircle className="h-5 w-5" />
@@ -486,9 +519,9 @@ export function AgentChat() {
             className="absolute inset-0 bg-black/30"
           />
 
-          <aside className="absolute right-0 top-0 h-full w-full max-w-5xl border-l border-border bg-background shadow-2xl">
-            <div className="flex h-full min-h-0 flex-col md:grid md:grid-cols-[260px_1fr]">
-              <div className="hidden flex-col border-r border-border md:flex">
+          <aside className="absolute right-0 top-0 h-full w-full max-w-5xl overflow-hidden border-l border-border bg-background shadow-2xl">
+            <div className="flex h-full min-h-0 flex-col md:flex-row">
+              <div className="hidden min-h-0 flex-col border-r border-border md:flex md:w-[260px] md:shrink-0">
                 <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
                   <div>
                     <p className="text-sm font-semibold">Conversations</p>
@@ -590,7 +623,7 @@ export function AgentChat() {
                 </div>
               </div>
 
-              <div className="relative flex h-full min-h-0 flex-1 flex-col">
+              <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {isMobileHistoryOpen ? (
                   <div className="absolute inset-0 z-10 flex flex-col bg-background md:hidden">
                     <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
@@ -917,8 +950,10 @@ export function AgentChat() {
                     </Button>
 
                     <textarea
+                      ref={composerInputRef}
                       value={input}
                       onChange={(event) => setInput(event.target.value)}
+                      onPaste={handleComposerPaste}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                           event.preventDefault();

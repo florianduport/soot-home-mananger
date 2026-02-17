@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useCloseDetailsOnOutside } from "@/components/ui/use-close-details-on-outside";
 
 type BudgetFormType =
   | "income"
@@ -19,9 +20,9 @@ type BudgetFormType =
   | "import";
 
 const triggerClassName =
-  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100";
+  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90";
 const menuItemClassName =
-  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100";
+  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-primary-foreground hover:bg-sidebar-primary-foreground/10";
 
 function getModalTitle(type: BudgetFormType) {
   if (type === "income") return "Ajouter un revenu du mois";
@@ -42,6 +43,7 @@ export function BudgetActionsMenu({
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [activeForm, setActiveForm] = useState<BudgetFormType | null>(null);
+  useCloseDetailsOnOutside(detailsRef);
 
   function openForm(type: BudgetFormType) {
     setActiveForm(type);
@@ -54,7 +56,7 @@ export function BudgetActionsMenu({
 
   return (
     <>
-      <details ref={detailsRef} className="group relative">
+      <details ref={detailsRef} className="action-menu group relative">
         <summary
           className={`${triggerClassName} list-none [&::-webkit-details-marker]:hidden`}
           title="Actions budget"
@@ -62,7 +64,7 @@ export function BudgetActionsMenu({
         >
           <MoreHorizontal className="h-4 w-4" />
         </summary>
-        <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+        <div className="action-menu-popover absolute right-0 z-[999] mt-2 w-64 rounded-xl border border-sidebar-primary bg-sidebar-primary p-2 text-sidebar-primary-foreground shadow-xl">
           <button type="button" className={menuItemClassName} onClick={() => openForm("income")}>
             Ajouter un revenu
           </button>
@@ -95,7 +97,7 @@ export function BudgetActionsMenu({
 
       {activeForm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="w-full max-w-xl rounded-2xl border border-sidebar-primary bg-sidebar-primary p-4 text-sidebar-primary-foreground shadow-2xl">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold">{getModalTitle(activeForm)}</h3>
               <button
@@ -119,7 +121,7 @@ export function BudgetActionsMenu({
                     name="amount"
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="0.01"
                     placeholder="Montant (EUR)"
                     required
                   />
@@ -153,7 +155,7 @@ export function BudgetActionsMenu({
                     name="amount"
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="0.01"
                     placeholder="Montant (EUR)"
                     required
                   />
@@ -187,7 +189,7 @@ export function BudgetActionsMenu({
                     name="amount"
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="0.01"
                     placeholder="Montant (EUR)"
                     required
                   />
@@ -222,7 +224,7 @@ export function BudgetActionsMenu({
                     name="amount"
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="0.01"
                     placeholder="Montant (EUR)"
                     required
                   />

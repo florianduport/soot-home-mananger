@@ -2,9 +2,16 @@
 
 import { useMemo, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
+import { AvatarSelect } from "@/components/ui/avatar-select";
 import { CalendarView, type CalendarTask } from "@/components/dashboard/calendar-view";
+import { useCloseDetailsOnOutside } from "@/components/ui/use-close-details-on-outside";
 
-type Option = { id: string; name: string | null; email?: string | null };
+type Option = {
+  id: string;
+  name: string | null;
+  email?: string | null;
+  image?: string | null;
+};
 
 export function CalendarPanel({
   tasks,
@@ -30,6 +37,7 @@ export function CalendarPanel({
   const [projectId, setProjectId] = useState("");
   const [equipmentId, setEquipmentId] = useState("");
   const filtersRef = useRef<HTMLDetailsElement>(null);
+  useCloseDetailsOnOutside(filtersRef);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -66,14 +74,14 @@ export function CalendarPanel({
       headerAction={
         <details ref={filtersRef} className="group relative">
           <summary
-            className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+            className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90 [&::-webkit-details-marker]:hidden"
             title="Filtres calendrier"
             aria-label="Filtres calendrier"
           >
             <SlidersHorizontal className="h-4 w-4" />
           </summary>
 
-          <div className="absolute right-0 z-20 mt-2 w-[min(90vw,340px)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+          <div className="absolute right-0 z-20 mt-2 w-[min(90vw,340px)] rounded-xl border border-sidebar-primary bg-sidebar-primary p-3 text-sidebar-primary-foreground shadow-xl">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <button
@@ -100,7 +108,7 @@ export function CalendarPanel({
                 </button>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-sidebar-primary-foreground">
                 <input
                   type="checkbox"
                   checked={showReminders}
@@ -108,7 +116,7 @@ export function CalendarPanel({
                 />
                 Afficher les rappels
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-sidebar-primary-foreground">
                 <input
                   type="checkbox"
                   checked={showImportantDates}
@@ -142,18 +150,16 @@ export function CalendarPanel({
                     </option>
                   ))}
                 </select>
-                <select
+                <AvatarSelect
                   value={assigneeId}
-                  onChange={(event) => setAssigneeId(event.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs"
-                >
-                  <option value="">Assigné</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name || member.email || "Membre"}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={setAssigneeId}
+                  emptyLabel="Assigné"
+                  options={members.map((member) => ({
+                    value: member.id,
+                    label: member.name || member.email || "Membre",
+                    imageUrl: member.image ?? null,
+                  }))}
+                />
                 <select
                   value={projectId}
                   onChange={(event) => setProjectId(event.target.value)}

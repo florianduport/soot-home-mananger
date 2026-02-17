@@ -98,7 +98,7 @@ export function ConvertShoppingListExpenseDialog({
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border border-sidebar-primary bg-sidebar-primary p-4 text-sidebar-primary-foreground shadow-2xl">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -109,7 +109,7 @@ export function ConvertShoppingListExpenseDialog({
               <button
                 type="button"
                 onClick={closeDialog}
-                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100"
+                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90"
                 title="Fermer"
                 aria-label="Fermer"
               >

@@ -1,25 +1,40 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AgentChat } from "@/components/agent/agent-chat";
+import { useTheme } from "@/hooks/use-theme";
 
 export function AppShell({
   houseName,
   houseIconUrl,
   userName,
   userEmail,
+  userImage,
   children,
 }: {
   houseName: string;
   houseIconUrl?: string | null;
   userName?: string | null;
   userEmail?: string | null;
+  userImage?: string | null;
   children: React.ReactNode;
 }) {
+  const { backgroundImageUrl } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const hasCustomBackground = Boolean(backgroundImageUrl);
+
+  const shellStyle: CSSProperties | undefined = hasCustomBackground
+    ? {
+        backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.3), rgba(15, 23, 42, 0.5)), url(${backgroundImageUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }
+    : undefined;
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -82,13 +97,17 @@ export function AppShell({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <div className="flex min-h-screen">
+    <div
+      className={`app-theme-shell min-h-dvh ${hasCustomBackground ? "app-theme-shell--image" : ""}`}
+      style={shellStyle}
+    >
+      <div className="flex min-h-dvh">
         <Sidebar
           houseName={houseName}
           houseIconUrl={houseIconUrl}
           userName={userName}
           userEmail={userEmail}
+          userImage={userImage}
           collapsed={collapsed}
           onToggle={toggle}
         />
@@ -98,12 +117,12 @@ export function AppShell({
             collapsed ? "lg:ml-20" : "lg:ml-72"
           }`}
         >
-          <div className="mx-auto flex min-w-0 w-full max-w-6xl flex-col gap-4 sm:gap-6">
+          <div className="app-shell-content mx-auto flex min-w-0 w-full max-w-6xl flex-col gap-4 sm:gap-6">
             <div className="flex items-center gap-3 lg:hidden">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-800"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition hover:bg-muted"
                 title="Ouvrir la navigation"
               >
                 <Menu className="h-4 w-4" />
@@ -137,6 +156,7 @@ export function AppShell({
         houseIconUrl={houseIconUrl}
         userName={userName}
         userEmail={userEmail}
+        userImage={userImage}
         collapsed={false}
         mobile
         isOpen={mobileMenuOpen}

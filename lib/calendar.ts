@@ -12,6 +12,7 @@ export type CalendarTask = {
   kind?: "task" | "reminder" | "important_date";
   parentId?: string;
   imageUrl?: string | null;
+  isImageGenerating?: boolean;
   zoneId?: string | null;
   categoryId?: string | null;
   assigneeId?: string | null;
@@ -29,6 +30,7 @@ type SourceTask = {
   dueDate: Date | null;
   reminderOffsetDays: number | null;
   imageUrl?: string | null;
+  isImageGenerating?: boolean;
   zoneId?: string | null;
   categoryId?: string | null;
   assigneeId?: string | null;
@@ -61,6 +63,7 @@ export function buildCalendarTasks(
         dueDate: task.dueDate.toISOString(),
         kind: "task",
         imageUrl: task.imageUrl ?? null,
+        isImageGenerating: Boolean(task.isImageGenerating),
         zoneId: task.zoneId ?? null,
         categoryId: task.categoryId ?? null,
         assigneeId: task.assigneeId ?? null,
@@ -83,6 +86,7 @@ export function buildCalendarTasks(
         kind: "reminder",
         parentId: task.id,
         imageUrl: task.imageUrl ?? null,
+        isImageGenerating: Boolean(task.isImageGenerating),
         zoneId: task.zoneId ?? null,
         categoryId: task.categoryId ?? null,
         assigneeId: task.assigneeId ?? null,

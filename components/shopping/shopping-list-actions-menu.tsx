@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import { Eraser, Euro, MoreHorizontal, Trash2 } from "lucide-react";
 import { clearShoppingList, deleteShoppingList } from "@/app/actions";
 import { ConvertShoppingListExpenseDialog } from "@/components/shopping/convert-shopping-list-expense-dialog";
+import { useCloseDetailsOnOutside } from "@/components/ui/use-close-details-on-outside";
 
 type ShoppingListActionsMenuProps = {
   shoppingListId: string;
@@ -14,9 +16,9 @@ type ShoppingListActionsMenuProps = {
 };
 
 const triggerClassName =
-  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition-colors hover:bg-slate-100";
+  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90";
 const menuItemClassName =
-  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100";
+  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-primary-foreground hover:bg-sidebar-primary-foreground/10";
 
 export function ShoppingListActionsMenu({
   shoppingListId,
@@ -26,8 +28,11 @@ export function ShoppingListActionsMenu({
   defaultAmount,
   defaultDate,
 }: ShoppingListActionsMenuProps) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useCloseDetailsOnOutside(detailsRef);
+
   return (
-    <details className="group relative">
+    <details ref={detailsRef} className="action-menu group relative">
       <summary
         className={`${triggerClassName} list-none [&::-webkit-details-marker]:hidden`}
         title="Actions"
@@ -36,7 +41,7 @@ export function ShoppingListActionsMenu({
         <MoreHorizontal className="h-4 w-4" />
       </summary>
 
-      <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+      <div className="action-menu-popover absolute right-0 z-[999] mt-2 w-56 rounded-xl border border-sidebar-primary bg-sidebar-primary p-2 text-sidebar-primary-foreground shadow-xl">
         {!alreadyConverted && budgetConversionReady ? (
           <ConvertShoppingListExpenseDialog
             shoppingListId={shoppingListId}

@@ -56,6 +56,109 @@ function isImportantDateUnavailableError(error: unknown) {
   );
 }
 
+function isAvatarColumnUnavailableError(error: unknown, entity: "animal" | "person") {
+  const entityToken = entity.toLowerCase();
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code !== "P2021" && error.code !== "P2022") {
+      return false;
+    }
+
+    const meta = error.meta as { column?: unknown } | undefined;
+    const column = typeof meta?.column === "string" ? meta.column.toLowerCase() : "";
+    const message = error.message.toLowerCase();
+
+    return (
+      column.includes("imageurl") ||
+      (message.includes("imageurl") && message.includes(entityToken))
+    );
+  }
+
+  return false;
+}
+
+async function loadAnimalsWithAvatarFallback(houseId: string) {
+  try {
+    return await prisma.animal.findMany({
+      where: { houseId },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        species: true,
+        imageUrl: true,
+        birthDate: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  } catch (error) {
+    if (!isAvatarColumnUnavailableError(error, "animal")) {
+      throw error;
+    }
+
+    const fallback = await prisma.animal.findMany({
+      where: { houseId },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        species: true,
+        birthDate: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return fallback.map((animal) => ({ ...animal, imageUrl: null as string | null }));
+  }
+}
+
+async function loadPeopleWithAvatarFallback(houseId: string) {
+  try {
+    return await prisma.person.findMany({
+      where: { houseId },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        relation: true,
+        imageUrl: true,
+        birthDate: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  } catch (error) {
+    if (!isAvatarColumnUnavailableError(error, "person")) {
+      throw error;
+    }
+
+    const fallback = await prisma.person.findMany({
+      where: { houseId },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        houseId: true,
+        name: true,
+        relation: true,
+        birthDate: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return fallback.map((person) => ({ ...person, imageUrl: null as string | null }));
+  }
+}
+
 export async function requireSession() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -125,11 +228,11 @@ export async function getHouseData(userId: string) {
   }
 
   const [zones, categories, animals, people, equipments, projects, members, invites, tasks, suggestions] =
-    await prisma.$transaction([
+    await Promise.all([
     prisma.zone.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     prisma.category.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
-    prisma.animal.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
-    prisma.person.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
+    loadAnimalsWithAvatarFallback(houseId),
+    loadPeopleWithAvatarFallback(houseId),
     prisma.equipment.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     prisma.project.findMany({ where: { houseId }, orderBy: { createdAt: "desc" } }),
     prisma.houseMember.findMany({

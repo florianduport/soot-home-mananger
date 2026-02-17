@@ -16,6 +16,7 @@ export default async function AppLayout({
       houseIconUrl={membership.house.iconUrl}
       userName={session.user.name}
       userEmail={session.user.email}
+      userImage={session.user.image}
     >
       <ConfettiOverlay />
       {children}

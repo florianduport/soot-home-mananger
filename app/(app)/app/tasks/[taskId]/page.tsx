@@ -8,9 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TaskDetailActionsMenu } from "@/components/tasks/task-detail-actions-menu";
 import { StatusToggle } from "@/components/tasks/status-toggle";
+import { AvatarSelect } from "@/components/ui/avatar-select";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { IllustrationPlaceholder } from "@/components/ui/illustration-placeholder";
 import { requireSession } from "@/lib/house";
 import { prisma } from "@/lib/db";
-import { SendHorizontal } from "lucide-react";
+import { resolveEquipmentImageUrl } from "@/lib/equipment-images";
+import { resolveProjectImageUrl } from "@/lib/project-images";
+import { isTaskImageGenerating } from "@/lib/task-images";
+import { CheckSquare2, SendHorizontal } from "lucide-react";
 
 function formatDate(value: Date | null) {
   if (!value) return "—";
@@ -112,6 +118,8 @@ export default async function TaskDetailPage({
   if (!membership) {
     redirect("/");
   }
+  const taskImageGenerating = await isTaskImageGenerating(task.id);
+  const hasTaskIllustration = taskImageGenerating || Boolean(task.imageUrl);
 
   const [members, zones, categories, projects, equipments, animals, people] =
     await prisma.$transaction([
@@ -127,6 +135,24 @@ export default async function TaskDetailPage({
       prisma.animal.findMany({ where: { houseId: task.houseId } }),
       prisma.person.findMany({ where: { houseId: task.houseId } }),
     ]);
+  const projectsWithImages = await Promise.all(
+    projects.map(async (project) => ({
+      ...project,
+      imageUrl: await resolveProjectImageUrl(project.id),
+    }))
+  );
+  const equipmentsWithImages = await Promise.all(
+    equipments.map(async (equipment) => ({
+      ...equipment,
+      imageUrl: await resolveEquipmentImageUrl(equipment.id),
+    }))
+  );
+  const projectImageMap = new Map(
+    projectsWithImages.map((project) => [project.id, project.imageUrl] as const)
+  );
+  const equipmentImageMap = new Map(
+    equipmentsWithImages.map((equipment) => [equipment.id, equipment.imageUrl] as const)
+  );
 
   const recurrenceSource = task.parent ?? (task.isTemplate ? task : null);
   const detailItems = [
@@ -142,12 +168,6 @@ export default async function TaskDetailPage({
           value: formatDate(task.dueDate),
         }
       : null,
-    task.assignee?.name || task.assignee?.email
-      ? {
-          label: "Assignée à",
-          value: task.assignee?.name || task.assignee?.email || "",
-        }
-      : null,
     task.zone?.name
       ? {
           label: "Zone",
@@ -160,36 +180,55 @@ export default async function TaskDetailPage({
           value: task.category.name,
         }
       : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  const relationItems = [
+    task.assignee?.name || task.assignee?.email
+      ? {
+          label: "Assignée à",
+          value: task.assignee?.name || task.assignee?.email || "",
+          imageUrl: task.assignee?.image ?? null,
+        }
+      : null,
     task.animal?.name
       ? {
           label: "Animal",
           value: task.animal.name,
+          imageUrl: task.animal.imageUrl ?? null,
         }
       : null,
     task.person?.name
       ? {
           label: "Personne",
           value: task.person.name,
+          imageUrl: task.person.imageUrl ?? null,
         }
       : null,
     task.project?.name
       ? {
           label: "Projet",
           value: task.project.name,
+          imageUrl: task.projectId ? projectImageMap.get(task.projectId) ?? null : null,
         }
       : null,
     task.equipment?.name
       ? {
           label: "Équipement",
           value: task.equipment.name,
+          imageUrl: task.equipmentId
+            ? equipmentImageMap.get(task.equipmentId) ?? null
+            : null,
         }
       : null,
-  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  ].filter(Boolean) as Array<{ label: string; value: string; imageUrl: string | null }>;
 
   return (
     <>
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <header className="page-header relative z-[120] flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <CheckSquare2
+            className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground"
+            aria-hidden="true"
+          />
           <p className="text-sm text-muted-foreground">
             <Link href="/app/tasks" className="hover:underline">
               Tâches
@@ -206,18 +245,32 @@ export default async function TaskDetailPage({
             isEditMode={isEditMode}
             assigneeId={task.assigneeId ?? task.assignee?.id ?? null}
             hasImage={Boolean(task.imageUrl)}
+            isImageGenerating={taskImageGenerating}
             members={members.map((member) => ({
               userId: member.userId,
               name: member.user.name,
               email: member.user.email,
+              image: member.user.image,
             }))}
           />
         </div>
       </header>
 
-      <section className={`grid gap-6 ${isEditMode ? "lg:grid-cols-[1.2fr,1fr]" : ""}`}>
-        <Card>
-          <CardHeader>
+      <section className={`relative grid gap-6 ${isEditMode ? "lg:grid-cols-[1.2fr,1fr]" : ""}`}>
+        <Card className={hasTaskIllustration ? "overflow-hidden pt-0" : undefined}>
+          {taskImageGenerating ? (
+            <IllustrationPlaceholder className="aspect-square w-full rounded-none border-x-0 border-t-0 border-b" />
+          ) : task.imageUrl ? (
+            <div className="overflow-hidden border-b bg-muted/30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={task.imageUrl}
+                alt={`Illustration ${task.title}`}
+                className="aspect-square w-full object-cover"
+              />
+            </div>
+          ) : null}
+          <CardHeader className={hasTaskIllustration ? "pt-6" : undefined}>
             <CardTitle>Détails de la tâche</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
@@ -227,21 +280,24 @@ export default async function TaskDetailPage({
               </span>
               <StatusToggle taskId={task.id} done={task.status === "DONE"} />
             </div>
-            {task.imageUrl ? (
-              <div className="overflow-hidden rounded-xl border bg-muted/30">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={task.imageUrl}
-                  alt={`Illustration ${task.title}`}
-                  className="h-56 w-full object-cover"
-                />
-              </div>
-            ) : null}
             <div className="grid gap-2 sm:grid-cols-2">
               {detailItems.map((item) => (
                 <div key={item.label}>
                   <p className="text-muted-foreground">{item.label}</p>
                   <p className="font-medium">{item.value}</p>
+                </div>
+              ))}
+              {relationItems.map((item) => (
+                <div key={item.label}>
+                  <p className="text-muted-foreground">{item.label}</p>
+                  <div className="mt-0.5 inline-flex items-center gap-2 font-medium">
+                    <EntityAvatar
+                      name={item.value}
+                      imageUrl={item.imageUrl}
+                      size="xs"
+                    />
+                    <span>{item.value}</span>
+                  </div>
                 </div>
               ))}
               <div>
@@ -340,18 +396,16 @@ export default async function TaskDetailPage({
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Assigner</label>
-                    <select
+                    <AvatarSelect
                       name="assigneeId"
                       defaultValue={task.assigneeId ?? task.assignee?.id ?? ""}
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    >
-                      <option value="">Non assignée</option>
-                      {members.map((member) => (
-                        <option key={member.id} value={member.userId}>
-                          {member.user.name || member.user.email || "Membre"}
-                        </option>
-                      ))}
-                    </select>
+                      emptyLabel="Non assignée"
+                      options={members.map((member) => ({
+                        value: member.userId,
+                        label: member.user.name || member.user.email || "Membre",
+                        imageUrl: member.user.image ?? null,
+                      }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Zone</label>
@@ -385,63 +439,55 @@ export default async function TaskDetailPage({
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Projet</label>
-                    <select
+                    <AvatarSelect
                       name="projectId"
                       defaultValue={task.projectId ?? task.project?.id ?? ""}
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    >
-                      <option value="">—</option>
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
-                    </select>
+                      emptyLabel="—"
+                      options={projectsWithImages.map((project) => ({
+                        value: project.id,
+                        label: project.name,
+                        imageUrl: project.imageUrl ?? null,
+                      }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Équipement</label>
-                    <select
+                    <AvatarSelect
                       name="equipmentId"
                       defaultValue={task.equipmentId ?? task.equipment?.id ?? ""}
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    >
-                      <option value="">—</option>
-                      {equipments.map((equipment) => (
-                        <option key={equipment.id} value={equipment.id}>
-                          {equipment.name}
-                        </option>
-                      ))}
-                    </select>
+                      emptyLabel="—"
+                      options={equipmentsWithImages.map((equipment) => ({
+                        value: equipment.id,
+                        label: equipment.name,
+                        imageUrl: equipment.imageUrl ?? null,
+                      }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Animal</label>
-                    <select
+                    <AvatarSelect
                       name="animalId"
                       defaultValue={task.animalId ?? task.animal?.id ?? ""}
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    >
-                      <option value="">—</option>
-                      {animals.map((animal) => (
-                        <option key={animal.id} value={animal.id}>
-                          {animal.name}
-                        </option>
-                      ))}
-                    </select>
+                      emptyLabel="—"
+                      options={animals.map((animal) => ({
+                        value: animal.id,
+                        label: animal.name,
+                        imageUrl: animal.imageUrl ?? null,
+                      }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Personne</label>
-                    <select
+                    <AvatarSelect
                       name="personId"
                       defaultValue={task.personId ?? task.person?.id ?? ""}
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    >
-                      <option value="">—</option>
-                      {people.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.name}
-                        </option>
-                      ))}
-                    </select>
+                      emptyLabel="—"
+                      options={people.map((person) => ({
+                        value: person.id,
+                        label: person.name,
+                        imageUrl: person.imageUrl ?? null,
+                      }))}
+                    />
                   </div>
                 </div>
                 <Button type="submit" className="w-full">

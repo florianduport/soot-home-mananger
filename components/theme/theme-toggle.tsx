@@ -1,37 +1,25 @@
 "use client";
 
-import { useTheme } from "next-themes";
-import { Switch } from "@/components/ui/switch";
+import { Paintbrush } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
+import { themeLabels } from "@/lib/theme/tokens";
+import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
-  const { theme, setTheme, systemTheme } = useTheme();
-  const resolved = theme === "system" ? systemTheme : theme;
-  const isDark = resolved === "dark";
+  const { theme, setTheme } = useTheme();
+  const nextTheme = theme === "default" ? "ghibli" : "default";
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">Mode sombre</p>
-        <p className="text-xs text-muted-foreground">
-          Par défaut, suit le thème système.
-        </p>
-      </div>
-      <div className="flex items-center gap-3 self-start sm:self-auto">
-        <button
-          type="button"
-          className={`text-xs font-medium ${
-            theme === "system" ? "text-foreground" : "text-muted-foreground"
-          }`}
-          onClick={() => setTheme("system")}
-        >
-          Auto
-        </button>
-        <Switch
-          checked={theme === "dark" || (theme === "system" && isDark)}
-          onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-          aria-label="Activer le mode sombre"
-        />
-      </div>
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => setTheme(nextTheme)}
+      className="h-8 gap-2 rounded-full border border-border bg-card text-xs"
+      aria-label={`Activer ${themeLabels[nextTheme]}`}
+    >
+      <Paintbrush className="h-3.5 w-3.5" />
+      {themeLabels[nextTheme]}
+    </Button>
   );
 }

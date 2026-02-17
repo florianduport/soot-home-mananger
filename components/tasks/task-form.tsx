@@ -1,21 +1,32 @@
+"use client";
+
 import { createTask } from "@/app/actions";
+import { AvatarSelect } from "@/components/ui/avatar-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useMemo, useRef } from "react";
 
 export type TaskFormData = {
   houseId: string;
+  currentUserId: string;
   zones: { id: string; name: string }[];
   categories: { id: string; name: string }[];
-  projects: { id: string; name: string }[];
-  equipments: { id: string; name: string }[];
-  animals: { id: string; name: string }[];
-  people: { id: string; name: string }[];
-  members: { id: string; name: string | null; email: string | null }[];
+  projects: { id: string; name: string; imageUrl?: string | null }[];
+  equipments: { id: string; name: string; imageUrl?: string | null }[];
+  animals: { id: string; name: string; imageUrl?: string | null }[];
+  people: { id: string; name: string; imageUrl?: string | null }[];
+  members: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image?: string | null;
+  }[];
 };
 
 export function TaskForm({
   houseId,
+  currentUserId,
   zones,
   categories,
   projects,
@@ -24,8 +35,30 @@ export function TaskForm({
   people,
   members,
 }: TaskFormData) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const defaultDueDate = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
+  const defaultAssigneeId = members.some((member) => member.id === currentUserId)
+    ? currentUserId
+    : "";
+
+  async function submitCreateTask(formData: FormData) {
+    await createTask(formData);
+    formRef.current?.reset();
+
+    const createTaskToggle = document.getElementById("create-task");
+    if (createTaskToggle instanceof HTMLInputElement) {
+      createTaskToggle.checked = false;
+    }
+  }
+
   return (
-    <form action={createTask} className="grid gap-4">
+    <form ref={formRef} action={submitCreateTask} className="grid gap-4">
       <input type="hidden" name="houseId" value={houseId} />
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="title">
@@ -44,7 +77,13 @@ export function TaskForm({
           <label className="text-sm font-medium" htmlFor="dueDate">
             Échéance
           </label>
-          <Input id="dueDate" name="dueDate" type="date" />
+          <Input
+            id="dueDate"
+            name="dueDate"
+            type="date"
+            required
+            defaultValue={defaultDueDate}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="reminderOffsetDays">
@@ -127,37 +166,33 @@ export function TaskForm({
           <label className="text-sm font-medium" htmlFor="projectId">
             Projet
           </label>
-          <select
+          <AvatarSelect
             id="projectId"
             name="projectId"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             defaultValue=""
-          >
-            <option value="">—</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel="—"
+            options={projects.map((project) => ({
+              value: project.id,
+              label: project.name,
+              imageUrl: project.imageUrl ?? null,
+            }))}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="equipmentId">
             Équipement
           </label>
-          <select
+          <AvatarSelect
             id="equipmentId"
             name="equipmentId"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             defaultValue=""
-          >
-            <option value="">—</option>
-            {equipments.map((equipment) => (
-              <option key={equipment.id} value={equipment.id}>
-                {equipment.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel="—"
+            options={equipments.map((equipment) => ({
+              value: equipment.id,
+              label: equipment.name,
+              imageUrl: equipment.imageUrl ?? null,
+            }))}
+          />
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -165,55 +200,49 @@ export function TaskForm({
           <label className="text-sm font-medium" htmlFor="assigneeId">
             Assigner à
           </label>
-          <select
+          <AvatarSelect
             id="assigneeId"
             name="assigneeId"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-            defaultValue=""
-          >
-            <option value="">—</option>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name || member.email || "Membre"}
-              </option>
-            ))}
-          </select>
+            defaultValue={defaultAssigneeId}
+            emptyLabel="—"
+            options={members.map((member) => ({
+              value: member.id,
+              label: member.name || member.email || "Membre",
+              imageUrl: member.image ?? null,
+            }))}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="animalId">
             Animal
           </label>
-          <select
+          <AvatarSelect
             id="animalId"
             name="animalId"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             defaultValue=""
-          >
-            <option value="">—</option>
-            {animals.map((animal) => (
-              <option key={animal.id} value={animal.id}>
-                {animal.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel="—"
+            options={animals.map((animal) => ({
+              value: animal.id,
+              label: animal.name,
+              imageUrl: animal.imageUrl ?? null,
+            }))}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="personId">
             Personne
           </label>
-          <select
+          <AvatarSelect
             id="personId"
             name="personId"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             defaultValue=""
-          >
-            <option value="">—</option>
-            {people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel="—"
+            options={people.map((person) => ({
+              value: person.id,
+              label: person.name,
+              imageUrl: person.imageUrl ?? null,
+            }))}
+          />
         </div>
       </div>
       <Button type="submit" variant="add" className="rounded-full">
