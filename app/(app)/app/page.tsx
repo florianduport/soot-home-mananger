@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { Home, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarView } from "@/components/dashboard/calendar-view";
 import { TaskList } from "@/components/dashboard/task-list";
 import { Button } from "@/components/ui/button";
 import { getHouseData, requireSession } from "@/lib/house";
 import { resolveEquipmentImageUrl } from "@/lib/equipment-images";
-import { buildCalendarTasks } from "@/lib/calendar";
 import { resolveProjectImageUrl } from "@/lib/project-images";
 import { resolveTaskImageGeneratingSet } from "@/lib/task-images";
+import { SootMascot } from "@/components/mascot/soot-mascot";
 
 export default async function OverviewPage() {
   const session = await requireSession();
-  const { membership, tasks, importantDates } = await getHouseData(session.user.id);
+  const { membership, tasks } = await getHouseData(session.user.id);
   const generatingTaskIds = await resolveTaskImageGeneratingSet(tasks.map((task) => task.id));
   const uniqueProjectIds = Array.from(
     new Set(tasks.map((task) => task.projectId).filter((projectId): projectId is string => Boolean(projectId)))
@@ -59,77 +58,79 @@ export default async function OverviewPage() {
     updatedAt: task.updatedAt,
   }));
 
-  const calendarTasks = buildCalendarTasks(
-    tasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      dueDate: task.dueDate,
-      reminderOffsetDays: task.reminderOffsetDays,
-      imageUrl: task.imageUrl ?? null,
-      isImageGenerating: generatingTaskIds.has(task.id),
-      zoneId: task.zoneId,
-      categoryId: task.categoryId,
-      assigneeId: task.assigneeId,
-      projectId: task.projectId,
-      equipmentId: task.equipmentId,
-    })),
-    importantDates.map((importantDate) => ({
-      id: importantDate.id,
-      title: importantDate.title,
-      description: importantDate.description,
-      date: importantDate.date,
-      type: importantDate.type,
-      isRecurringYearly: importantDate.isRecurringYearly,
-    }))
-  );
-
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const doneThisWeek = taskItems.filter(
-    (task) => task.status === "DONE" && task.updatedAt >= weekAgo
-  );
-  const weekAhead = new Date();
+  const today = new Date();
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setDate(endOfDay.getDate() + 1);
+  const weekAhead = new Date(startOfDay);
   weekAhead.setDate(weekAhead.getDate() + 7);
+
+  const focusOfDay = taskItems
+    .filter((task) => {
+      if (task.status === "DONE" || !task.dueDate) return false;
+      const due = new Date(task.dueDate);
+      return due >= startOfDay && due < endOfDay;
+    })
+    .slice(0, 3);
+
+  const routineTasks = taskItems
+    .filter((task) => task.recurring)
+    .filter((task) => task.status !== "DONE")
+    .slice(0, 5);
+
   const upcomingTasks = taskItems.filter((task) => {
-    if (task.status === "DONE") return false;
-    if (!task.dueDate) return false;
+    if (task.status === "DONE" || !task.dueDate) return false;
     const due = new Date(task.dueDate);
-    return due >= weekAgo && due <= weekAhead;
+    return due >= startOfDay && due <= weekAhead;
   });
 
   return (
     <>
-      <header className="page-header">
-        <Home className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">Vue globale</p>
-        <h1 className="text-2xl font-semibold sm:whitespace-nowrap">{membership.house.name}</h1>
+      <header className="page-header flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Home className="float-left mr-3 mt-3 h-7 w-7 text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">Aujourd&apos;hui</p>
+          <h1 className="text-2xl font-semibold sm:whitespace-nowrap">{membership.house.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Une maison calme, une action utile à la fois.
+          </p>
+        </div>
+        <Button asChild size="icon" variant="add" className="rounded-full">
+          <Link href="/app/tasks?create=1">
+            <Plus className="h-4 w-4" />
+            <span className="sr-only">Ajouter</span>
+          </Link>
+        </Button>
       </header>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Tâches à venir</CardTitle>
-          <Button asChild size="icon" variant="add" className="rounded-full">
-            <Link href="/app/tasks">
-              <Plus className="h-4 w-4" />
-              <span className="sr-only">Ajouter une tâche</span>
-            </Link>
-          </Button>
+          <CardTitle>Focus du jour</CardTitle>
+          <SootMascot mood={focusOfDay.length ? "working" : "sleepy"} className="h-10 w-10" />
         </CardHeader>
         <CardContent>
-          <TaskList tasks={upcomingTasks.slice(0, 8)} />
+          <TaskList tasks={focusOfDay} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Tâches faites cette semaine</CardTitle>
+          <CardTitle>Routines</CardTitle>
         </CardHeader>
         <CardContent>
-          <TaskList tasks={doneThisWeek.slice(0, 8)} />
+          <TaskList tasks={routineTasks} />
         </CardContent>
       </Card>
 
-      <CalendarView tasks={calendarTasks} />
+      <Card>
+        <CardHeader>
+          <CardTitle>À venir (7 jours)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TaskList tasks={upcomingTasks.slice(0, 8)} />
+        </CardContent>
+      </Card>
     </>
   );
 }

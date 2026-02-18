@@ -3,9 +3,9 @@ export type GhibliMode = "light" | "dark";
 
 type ThemeTokens = Record<string, string>;
 
-export const THEME_STORAGE_KEY = "homanager-theme";
-export const APP_BACKGROUND_STORAGE_KEY = "homanager-background-image";
-export const GHIBLI_MODE_STORAGE_KEY = "homanager-ghibli-mode";
+export const THEME_STORAGE_KEY = "soot-theme";
+export const APP_BACKGROUND_STORAGE_KEY = "soot-background-image";
+export const GHIBLI_MODE_STORAGE_KEY = "soot-ghibli-mode";
 export const DEFAULT_THEME: AppTheme = "default";
 export const DEFAULT_GHIBLI_MODE: GhibliMode = "light";
 

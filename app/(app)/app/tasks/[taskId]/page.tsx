@@ -116,7 +116,7 @@ export default async function TaskDetailPage({
   });
 
   if (!membership) {
-    redirect("/");
+    redirect("/app");
   }
   const taskImageGenerating = await isTaskImageGenerating(task.id);
   const hasTaskIllustration = taskImageGenerating || Boolean(task.imageUrl);

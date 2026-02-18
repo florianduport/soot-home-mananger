@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Soot happy">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#333030"/>
+      <stop offset="75%" stop-color="#221e1e"/>
+      <stop offset="100%" stop-color="#171414"/>
+    </radialGradient>
+  </defs>
+  <circle cx="80" cy="80" r="52" fill="url(#g)"/>
+  <circle cx="60" cy="67" r="10" fill="#fff"/>
+  <circle cx="100" cy="67" r="10" fill="#fff"/>
+  <circle cx="60" cy="67" r="4" fill="#111"/>
+  <circle cx="100" cy="67" r="4" fill="#111"/>
+  <path d="M60 97c5 8 13 12 20 12s15-4 20-12" fill="none" stroke="#f5dfb8" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="42" cy="44" r="6" fill="#201c1c"/>
+  <circle cx="118" cy="42" r="5" fill="#252020"/>
+</svg>

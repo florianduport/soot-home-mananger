@@ -162,19 +162,74 @@ async function loadPeopleWithAvatarFallback(houseId: string) {
 export async function requireSession() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    redirect("/");
+    redirect("/login");
   }
   return session;
 }
 
-export async function requireHouse(userId: string) {
+export async function requireHouse(
+  userId: string,
+  options?: {
+    allowInactive?: boolean;
+    allowIncompleteOnboarding?: boolean;
+  }
+) {
   const membership = await prisma.houseMember.findFirst({
     where: { userId },
+    include: { house: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!membership) {
+    redirect("/setup/house");
+  }
+
+  if (!options?.allowInactive && membership.house.clientStatus === "INACTIVE") {
+    redirect("/client-inactif");
+  }
+
+  if (
+    !options?.allowIncompleteOnboarding &&
+    !membership.house.isOnboardingCompleted
+  ) {
+    redirect("/setup/house");
+  }
+
+  return membership;
+}
+
+export async function requirePrincipalOwner(userId: string, houseId: string) {
+  const house = await prisma.house.findUnique({
+    where: { id: houseId },
+    select: {
+      id: true,
+      createdById: true,
+      clientStatus: true,
+    },
+  });
+
+  if (!house) {
+    redirect("/setup/house");
+  }
+
+  if (house.clientStatus === "INACTIVE") {
+    redirect("/client-inactif");
+  }
+
+  if (house.createdById !== userId) {
+    redirect("/app");
+  }
+
+  const membership = await prisma.houseMember.findFirst({
+    where: {
+      userId,
+      houseId,
+    },
     include: { house: true },
   });
 
   if (!membership) {
-    redirect("/");
+    redirect("/setup/house");
   }
 
   return membership;

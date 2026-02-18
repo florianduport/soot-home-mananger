@@ -84,7 +84,7 @@ export default async function ProjectDetailPage({
   });
 
   if (!membership) {
-    redirect("/");
+    redirect("/app");
   }
 
   const [projectImageState, generatingTaskIds] = await Promise.all([

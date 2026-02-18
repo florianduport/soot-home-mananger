@@ -5,6 +5,7 @@ import { TaskAssigneeSelect } from "@/components/tasks/task-assignee-select";
 import { TaskCompleteMessage } from "@/components/tasks/task-complete-message";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { IllustrationPlaceholder } from "@/components/ui/illustration-placeholder";
+import { SootMascot } from "@/components/mascot/soot-mascot";
 
 export type TaskListItem = {
   id: string;
@@ -62,7 +63,10 @@ export function TaskList({
   if (!tasks.length) {
     return (
       <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-        Aucune tâche pour le moment. Commence par créer ta première tâche.
+        <div className="mb-3 flex items-center gap-3">
+          <SootMascot mood="sleepy" className="h-8 w-8" />
+          <p>Aucune tâche pour le moment. Commence par créer ta première tâche.</p>
+        </div>
       </div>
     );
   }

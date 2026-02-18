@@ -5,9 +5,10 @@ import { useEffect, useState } from "react";
 type Piece = {
   id: number;
   left: number;
+  top: number;
   delay: number;
   duration: number;
-  hue: number;
+  size: number;
 };
 
 export function ConfettiOverlay() {
@@ -16,16 +17,17 @@ export function ConfettiOverlay() {
 
   useEffect(() => {
     const trigger = () => {
-      const generated = Array.from({ length: 80 }).map((_, index) => ({
+      const generated = Array.from({ length: 22 }).map((_, index) => ({
         id: index,
-        left: Math.random() * 100,
-        delay: Math.random() * 0.4,
-        duration: 2 + Math.random(),
-        hue: Math.floor(Math.random() * 360),
+        left: 35 + Math.random() * 30,
+        top: 38 + Math.random() * 18,
+        delay: Math.random() * 0.16,
+        duration: 0.75 + Math.random() * 0.45,
+        size: 4 + Math.round(Math.random() * 6),
       }));
       setPieces(generated);
       setVisible(true);
-      window.setTimeout(() => setVisible(false), 2800);
+      window.setTimeout(() => setVisible(false), 1200);
     };
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { timestamp?: number };
@@ -54,12 +56,14 @@ export function ConfettiOverlay() {
       {pieces.map((piece) => (
         <span
           key={piece.id}
-          className="confetti-piece"
+          className="soot-puff"
           style={{
             left: `${piece.left}%`,
+            top: `${piece.top}%`,
+            width: `${piece.size}px`,
+            height: `${piece.size}px`,
             animationDelay: `${piece.delay}s`,
             animationDuration: `${piece.duration}s`,
-            backgroundColor: `hsl(${piece.hue} 80% 60%)`,
           }}
         />
       ))}

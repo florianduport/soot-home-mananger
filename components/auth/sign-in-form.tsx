@@ -32,35 +32,39 @@ export function SignInForm({
   };
 
   const content = (
-    <Card className="w-full max-w-md shadow-xl">
+    <Card className="w-full max-w-md border-[#cfbf9f] bg-[#fff8eb] shadow-[0_16px_36px_rgba(48,38,24,0.14)]">
       <CardHeader>
-        <CardTitle>Homanager</CardTitle>
-        <CardDescription>
-          Connecte-toi avec un lien magique pour accéder à ta maison.
+        <CardTitle className="font-serif text-2xl text-[#1b2a21]">Soot</CardTitle>
+        <CardDescription className="text-sm text-[#3d5649]">
+          Connecte-toi avec un lien magique pour accéder à ton foyer.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
+            <label htmlFor="email" className="text-sm font-semibold text-[#25362d]">
               Email
             </label>
             <Input
               id="email"
               type="email"
               required
+              className="border-[#c8b89c] bg-[#fffdf7] text-[#1f2f26] placeholder:text-[#60796b] focus-visible:border-[#486a54]"
               placeholder="toi@exemple.fr"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button
+            type="submit"
+            className="w-full bg-[#1f3224] text-[#f7eeda] hover:bg-[#18281c]"
+            disabled={isLoading}
+          >
             {isLoading ? "Envoi..." : "Envoyer le lien magique"}
           </Button>
           {sent ? (
-            <p className="text-sm text-muted-foreground">
-              Si un serveur email n’est pas configuré, le lien apparaît dans les
-              logs serveur.
+            <p className="text-sm text-[#3b5648]">
+              Lien magique envoyé. Vérifie ta boîte email.
             </p>
           ) : null}
         </form>
@@ -73,7 +77,7 @@ export function SignInForm({
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 p-6 dark:from-slate-950 dark:to-slate-900">
+    <main className="soot-auth-screen flex min-h-screen w-full items-center justify-center overflow-x-clip bg-[radial-gradient(circle_at_18%_8%,#fdf6e6_0,transparent_44%),radial-gradient(circle_at_87%_2%,#d7e6cf_0,transparent_35%),linear-gradient(160deg,#f6efde,#efe1ca)] p-4 sm:p-6">
       {content}
     </main>
   );

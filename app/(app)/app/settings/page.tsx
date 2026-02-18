@@ -127,8 +127,7 @@ export default async function SettingsPage() {
                 Envoyer l&apos;invitation
               </Button>
               <p className="text-xs text-muted-foreground">
-                Le lien d&apos;invitation est affiché ci-dessous (ou dans les logs
-                serveur si aucun email n&apos;est configuré).
+                Le lien d&apos;invitation est affiché ci-dessous.
               </p>
             </form>
 

@@ -112,6 +112,7 @@
 @layer base {
   html,
   body {
+    width: 100%;
     min-height: 100%;
     overscroll-behavior-y: none;
   }
@@ -269,31 +270,171 @@
     background-size: cover;
     mix-blend-mode: normal;
   }
+
+  .soot-landing {
+    color-scheme: light;
+    background-color: #214834;
+    background:
+      radial-gradient(circle at 12% 6%, rgba(152, 190, 143, 0.34) 0%, transparent 34%),
+      radial-gradient(circle at 90% 0%, rgba(123, 170, 126, 0.28) 0%, transparent 36%),
+      radial-gradient(circle at 50% 78%, rgba(47, 87, 62, 0.34) 0%, transparent 46%),
+      linear-gradient(150deg, #10271d 0%, #173627 24%, #214834 52%, #2c5940 74%, #234a36 100%);
+  }
+
+  .soot-landing [data-slot="card"] {
+    color: #203126;
+  }
+
+  .soot-landing [data-slot="card-title"] {
+    color: #1f2d24;
+  }
+
+  .soot-auth-screen {
+    color-scheme: light;
+  }
+
+  .soot-landing-grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    background-image: radial-gradient(circle at 1px 1px, rgba(40, 35, 33, 0.07) 1px, transparent 0);
+    background-size: 3px 3px;
+    mix-blend-mode: soft-light;
+  }
+
+  .soot-surface {
+    border: 1px solid rgba(177, 153, 119, 0.44);
+    background:
+      linear-gradient(170deg, rgba(255, 251, 244, 0.9), rgba(246, 236, 218, 0.9)),
+      radial-gradient(circle at 0 0, rgba(252, 244, 231, 0.8), transparent 52%);
+    box-shadow: 0 16px 34px rgba(74, 57, 34, 0.11);
+    backdrop-filter: saturate(1.02);
+  }
+
+  .soot-chip {
+    border: 1px solid rgba(122, 146, 124, 0.45);
+    background: rgba(245, 236, 221, 0.9);
+    color: #365043;
+  }
+
+  .soot-ambient-speck {
+    position: absolute;
+    bottom: -10px;
+    pointer-events: none;
+    z-index: 2;
+    border-radius: 9999px;
+    background: rgba(46, 43, 41, 0.58);
+    opacity: 0;
+    filter: blur(0.1px);
+    animation-name: soot-ambient-float;
+    animation-fill-mode: forwards;
+    animation-timing-function: ease-out;
+  }
+
+  .soot-parallax-layer {
+    position: absolute;
+    border-radius: 9999px;
+    pointer-events: none;
+    transition: transform 220ms ease-out;
+  }
+
+  .soot-parallax-layer--back {
+    inset: -10% 24% 42% -8%;
+    background: radial-gradient(circle, rgba(118, 152, 121, 0.28) 0%, transparent 72%);
+    transform: translate(calc(var(--soot-parallax-x, 0px) * -0.35), calc(var(--soot-parallax-y, 0px) * -0.35));
+  }
+
+  .soot-parallax-layer--front {
+    inset: 64% -2% -16% 46%;
+    background: radial-gradient(circle, rgba(201, 163, 101, 0.34) 0%, transparent 75%);
+    transform: translate(calc(var(--soot-parallax-x, 0px) * 0.45), calc(var(--soot-parallax-y, 0px) * 0.45));
+  }
 }
 
-.confetti-piece {
-  position: absolute;
-  top: -5%;
-  width: 8px;
-  height: 12px;
-  border-radius: 2px;
-  transform: translateY(-50%);
-  animation-name: confetti-fall;
-  animation-timing-function: ease-out;
-  animation-fill-mode: forwards;
-}
-
-@keyframes confetti-fall {
+@keyframes soot-ambient-float {
   0% {
     opacity: 0;
-    transform: translateY(-50%) scale(0.6);
+    transform: translateY(0) scale(0.55);
   }
-  20% {
-    opacity: 1;
+  15% {
+    opacity: 0.56;
   }
   100% {
     opacity: 0;
-    transform: translateY(120vh) translateX(30px) rotate(220deg);
+    transform: translateY(-54vh) scale(1.15);
+  }
+}
+
+.soot-puff {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(37, 34, 33, 0.86);
+  transform: scale(0.3);
+  animation-name: soot-drift;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
+}
+
+@keyframes soot-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(10px, -36px, 0) scale(1.55);
+  }
+}
+
+.soot-mascot {
+  transform-origin: center;
+}
+
+.soot-breathe {
+  animation: soot-breathe 3.4s ease-in-out infinite;
+}
+
+.soot-bounce {
+  animation: soot-bounce 0.7s ease-out both;
+}
+
+.soot-tilt {
+  animation: soot-tilt 2.4s ease-in-out infinite;
+}
+
+@keyframes soot-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@keyframes soot-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-5px) scale(1.05);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes soot-tilt {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
   }
 }
 

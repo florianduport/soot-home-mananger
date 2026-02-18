@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Soot working">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#322f2f"/>
+      <stop offset="75%" stop-color="#211d1d"/>
+      <stop offset="100%" stop-color="#161313"/>
+    </radialGradient>
+  </defs>
+  <circle cx="80" cy="80" r="52" fill="url(#g)"/>
+  <circle cx="60" cy="68" r="10" fill="#fff"/>
+  <circle cx="100" cy="68" r="10" fill="#fff"/>
+  <circle cx="60" cy="68" r="4" fill="#111"/>
+  <circle cx="100" cy="68" r="4" fill="#111"/>
+  <rect x="72" y="90" width="16" height="4" rx="2" fill="#f0dfc4"/>
+  <path d="M26 98l11-6M133 100l-12-7" stroke="#2b2626" stroke-width="4" stroke-linecap="round"/>
+</svg>

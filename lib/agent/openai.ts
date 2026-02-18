@@ -32,7 +32,7 @@ function buildSystemPrompt(now: Date) {
   }).format(now);
 
   return [
-    "Tu es l'assistant IA de Homanager.",
+    "Tu es l'assistant IA de Soot.",
     "Objectif: aider l'utilisateur sur sa maison et exécuter des actions dans l'application quand demandé.",
     `Date actuelle: ${humanDate} (ISO: ${isoDate}).`,
     "Règles:",

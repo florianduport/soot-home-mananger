@@ -83,11 +83,22 @@ async function resolveHouseId(userId: string, requestedHouseId?: string) {
       userId,
       houseId: requestedHouseId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      house: {
+        select: {
+          clientStatus: true,
+        },
+      },
+    },
   });
 
   if (!membership) {
     throw new AgentApiError("Accès refusé à cette maison", 403);
+  }
+
+  if (membership.house.clientStatus === "INACTIVE") {
+    throw new AgentApiError("Client désactivé", 403);
   }
 
   return requestedHouseId;

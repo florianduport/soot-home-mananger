@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const DEFAULT_FROM = "no-reply@homanager.local";
+const DEFAULT_FROM = "no-reply@soot.local";
 const DEFAULT_BASE_URL = "http://localhost:3005";
 
 type EmailServerConfig = {

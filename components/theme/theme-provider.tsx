@@ -32,6 +32,9 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const LEGACY_THEME_STORAGE_KEY = "soot-theme";
+const LEGACY_BACKGROUND_STORAGE_KEY = "soot-background-image";
+const LEGACY_GHIBLI_MODE_STORAGE_KEY = "soot-ghibli-mode";
 
 function applyTheme(theme: AppTheme, ghibliMode: GhibliMode) {
   const root = document.documentElement;
@@ -51,13 +54,25 @@ function applyTheme(theme: AppTheme, ghibliMode: GhibliMode) {
 export function ThemeProvider({
   children,
   defaultTheme = DEFAULT_THEME,
+  storageScope = null,
 }: {
   children: React.ReactNode;
   defaultTheme?: AppTheme;
+  storageScope?: string | null;
 }) {
   const [theme, setThemeState] = useState<AppTheme>(defaultTheme);
   const [ghibliMode, setGhibliModeState] = useState<GhibliMode>(DEFAULT_GHIBLI_MODE);
   const [backgroundImageUrl, setBackgroundImageUrlState] = useState<string | null>(null);
+
+  const scopedThemeStorageKey = storageScope
+    ? `${THEME_STORAGE_KEY}:${storageScope}`
+    : THEME_STORAGE_KEY;
+  const scopedGhibliModeStorageKey = storageScope
+    ? `${GHIBLI_MODE_STORAGE_KEY}:${storageScope}`
+    : GHIBLI_MODE_STORAGE_KEY;
+  const scopedBackgroundStorageKey = storageScope
+    ? `${APP_BACKGROUND_STORAGE_KEY}:${storageScope}`
+    : APP_BACKGROUND_STORAGE_KEY;
 
   useEffect(() => {
     applyTheme(theme, ghibliMode);
@@ -66,27 +81,38 @@ export function ThemeProvider({
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       try {
-        const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+        const storedTheme =
+          localStorage.getItem(scopedThemeStorageKey) ||
+          localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
         if (isAppTheme(storedTheme)) {
           setThemeState(storedTheme);
+          localStorage.setItem(scopedThemeStorageKey, storedTheme);
         }
       } catch {
         // Ignore storage errors in private mode.
       }
 
       try {
-        const storedGhibliMode = localStorage.getItem(GHIBLI_MODE_STORAGE_KEY);
+        const storedGhibliMode =
+          localStorage.getItem(scopedGhibliModeStorageKey) ||
+          localStorage.getItem(LEGACY_GHIBLI_MODE_STORAGE_KEY);
         if (isGhibliMode(storedGhibliMode)) {
           setGhibliModeState(storedGhibliMode);
+          localStorage.setItem(scopedGhibliModeStorageKey, storedGhibliMode);
         }
       } catch {
         // Ignore storage errors in private mode.
       }
 
       try {
-        const storedBackground = localStorage.getItem(APP_BACKGROUND_STORAGE_KEY);
+        const storedBackground =
+          localStorage.getItem(scopedBackgroundStorageKey) ||
+          localStorage.getItem(LEGACY_BACKGROUND_STORAGE_KEY);
         const normalized = storedBackground?.trim() ?? "";
         setBackgroundImageUrlState(normalized || null);
+        if (normalized) {
+          localStorage.setItem(scopedBackgroundStorageKey, normalized);
+        }
       } catch {
         // Ignore storage errors in private mode.
       }
@@ -95,25 +121,25 @@ export function ThemeProvider({
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, []);
+  }, [scopedBackgroundStorageKey, scopedGhibliModeStorageKey, scopedThemeStorageKey]);
 
   const setTheme = useCallback((nextTheme: AppTheme) => {
     setThemeState(nextTheme);
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+      localStorage.setItem(scopedThemeStorageKey, nextTheme);
     } catch {
       // Ignore storage errors in private mode.
     }
-  }, []);
+  }, [scopedThemeStorageKey]);
 
   const setGhibliMode = useCallback((nextMode: GhibliMode) => {
     setGhibliModeState(nextMode);
     try {
-      localStorage.setItem(GHIBLI_MODE_STORAGE_KEY, nextMode);
+      localStorage.setItem(scopedGhibliModeStorageKey, nextMode);
     } catch {
       // Ignore storage errors in private mode.
     }
-  }, []);
+  }, [scopedGhibliModeStorageKey]);
 
   const setBackgroundImage = useCallback((imageUrl: string | null) => {
     const normalized = imageUrl?.trim() ?? "";
@@ -122,14 +148,14 @@ export function ThemeProvider({
     setBackgroundImageUrlState(nextUrl);
     try {
       if (nextUrl) {
-        localStorage.setItem(APP_BACKGROUND_STORAGE_KEY, nextUrl);
+        localStorage.setItem(scopedBackgroundStorageKey, nextUrl);
       } else {
-        localStorage.removeItem(APP_BACKGROUND_STORAGE_KEY);
+        localStorage.removeItem(scopedBackgroundStorageKey);
       }
     } catch {
       // Ignore storage errors in private mode.
     }
-  }, []);
+  }, [scopedBackgroundStorageKey]);
 
   const clearBackgroundImage = useCallback(() => {
     setBackgroundImage(null);

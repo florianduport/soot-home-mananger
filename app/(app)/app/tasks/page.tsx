@@ -56,6 +56,7 @@ export default async function TasksPage({
   const categoryFilter = (resolvedSearchParams.category ?? "").toString();
   const assigneeFilter = (resolvedSearchParams.assignee ?? "").toString();
   const timeframeFilter = (resolvedSearchParams.timeframe ?? "").toString() || "all";
+  const createOpen = (resolvedSearchParams.create ?? "").toString() === "1";
 
   const now = new Date();
   const startDefaultWindow = new Date(now);
@@ -121,7 +122,12 @@ export default async function TasksPage({
   return (
     <>
       <section>
-        <input id="create-task" type="checkbox" className="peer sr-only" />
+        <input
+          id="create-task"
+          type="checkbox"
+          className="peer sr-only"
+          defaultChecked={createOpen}
+        />
         <header className="page-header flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <CheckSquare2

@@ -21,13 +21,13 @@ const ghibliSerif = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Homanager",
+  title: "Soot - Organisation de la maison",
   description: "Gestion des tâches et de la maison",
-  applicationName: "Homanager",
+  applicationName: "Soot",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Homanager",
+    title: "Soot",
     statusBarStyle: "default",
   },
   formatDetection: {
@@ -35,12 +35,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-    shortcut: ["/favicon.ico"],
+    shortcut: ["/favicon.svg"],
   },
 };
 

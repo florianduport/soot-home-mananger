@@ -130,6 +130,148 @@ const BUDGET_ALLOWED_MIME_TYPES = new Set([
 const BUDGET_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 const BUDGET_MONTH_REGEX = /^\d{4}-\d{2}$/;
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_ONBOARDING_ZONE_NAMES = ["Intérieur", "Jardin"] as const;
+const DEFAULT_ONBOARDING_CATEGORY_NAMES = [
+  "Entretien",
+  "Bricolage",
+  "Administratif",
+] as const;
+const DEFAULT_ONBOARDING_TASK_TITLES = [
+  "Faire le tour de la maison",
+  "Préparer une première liste d'achats",
+] as const;
+type ParsedOnboardingPerson = {
+  name: string;
+  relation: string | null;
+};
+type ParsedHouseOnboarding = {
+  hasProvidedAnswers: boolean;
+  people: ParsedOnboardingPerson[];
+  zoneNames: string[];
+  projectNames: string[];
+  taskTitles: string[];
+};
+
+function getOptionalOnboardingInput(formData: FormData, fieldName: string) {
+  const raw = formData.get(fieldName);
+  if (typeof raw !== "string") {
+    return "";
+  }
+  return raw.trim();
+}
+
+function dedupeTextList(values: string[]) {
+  const seen = new Set<string>();
+  const uniqueValues: string[] = [];
+
+  for (const value of values) {
+    const key = value.toLocaleLowerCase("fr-FR");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    uniqueValues.push(value);
+  }
+
+  return uniqueValues;
+}
+
+function parseOnboardingList(
+  value: string,
+  { maxItems = 8, maxLength = 120 }: { maxItems?: number; maxLength?: number } = {}
+) {
+  if (!value) {
+    return [];
+  }
+
+  const parsed = value
+    .split(/[\n,;]+/g)
+    .map((item) =>
+      item
+        .trim()
+        .replace(/^[-*]\s*/, "")
+        .replace(/^\d+[.)]\s*/, "")
+    )
+    .filter(Boolean)
+    .map((item) => item.slice(0, maxLength));
+
+  return dedupeTextList(parsed).slice(0, maxItems);
+}
+
+function parseOnboardingPeople(value: string, maxItems = 6) {
+  return parseOnboardingList(value, { maxItems, maxLength: 180 })
+    .map((item) => {
+      const parenthesisMatch = item.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      if (parenthesisMatch) {
+        return {
+          name: parenthesisMatch[1].trim().slice(0, 80),
+          relation: parenthesisMatch[2].trim().slice(0, 80) || null,
+        };
+      }
+
+      const colonIndex = item.indexOf(":");
+      if (colonIndex > 0) {
+        const name = item.slice(0, colonIndex).trim().slice(0, 80);
+        const relation = item.slice(colonIndex + 1).trim().slice(0, 80);
+        return {
+          name,
+          relation: relation || null,
+        };
+      }
+
+      return {
+        name: item.trim().slice(0, 80),
+        relation: null,
+      };
+    })
+    .filter((person) => person.name.length > 0);
+}
+
+function parseHouseOnboarding(formData: FormData): ParsedHouseOnboarding {
+  const onboardingPeopleRaw = getOptionalOnboardingInput(
+    formData,
+    "onboardingPeople"
+  );
+  const onboardingZonesRaw = getOptionalOnboardingInput(formData, "onboardingZones");
+  const onboardingProjectsRaw = getOptionalOnboardingInput(
+    formData,
+    "onboardingProjects"
+  );
+  const onboardingTasksRaw = getOptionalOnboardingInput(formData, "onboardingTasks");
+  const hasProvidedAnswers = [
+    onboardingPeopleRaw,
+    onboardingZonesRaw,
+    onboardingProjectsRaw,
+    onboardingTasksRaw,
+  ].some((value) => value.length > 0);
+
+  const people = parseOnboardingPeople(onboardingPeopleRaw);
+  const zoneNames = dedupeTextList([
+    ...DEFAULT_ONBOARDING_ZONE_NAMES,
+    ...parseOnboardingList(onboardingZonesRaw, { maxItems: 8, maxLength: 80 }),
+  ]);
+  const projectNames = parseOnboardingList(onboardingProjectsRaw, {
+    maxItems: 4,
+    maxLength: 120,
+  });
+  const parsedTaskTitles = parseOnboardingList(onboardingTasksRaw, {
+    maxItems: 8,
+    maxLength: 180,
+  });
+  const taskTitles = parsedTaskTitles.length
+    ? parsedTaskTitles
+    : hasProvidedAnswers
+      ? [...DEFAULT_ONBOARDING_TASK_TITLES]
+      : [];
+
+  return {
+    hasProvidedAnswers,
+    people,
+    zoneNames,
+    projectNames,
+    taskTitles,
+  };
+}
 
 function isShoppingTableUnavailableError(error: unknown) {
   return (
@@ -201,10 +343,22 @@ async function requireSessionUser() {
 async function requireMembership(userId: string, houseId: string) {
   const membership = await prisma.houseMember.findFirst({
     where: { userId, houseId },
+    include: {
+      house: {
+        select: {
+          clientStatus: true,
+          createdById: true,
+        },
+      },
+    },
   });
 
   if (!membership) {
     throw new Error("Forbidden");
+  }
+
+  if (membership.house.clientStatus === "INACTIVE") {
+    throw new Error("Ce client est désactivé. Contacte le propriétaire principal.");
   }
 
   return membership;
@@ -214,6 +368,14 @@ async function requireOwner(userId: string, houseId: string) {
   const membership = await requireMembership(userId, houseId);
   if (membership.role !== "OWNER") {
     throw new Error("Forbidden");
+  }
+  return membership;
+}
+
+export async function requirePrincipalOwner(userId: string, houseId: string) {
+  const membership = await requireOwner(userId, houseId);
+  if (membership.house.createdById !== userId) {
+    throw new Error("Seul le propriétaire principal peut effectuer cette action.");
   }
   return membership;
 }
@@ -1674,6 +1836,9 @@ export async function uploadEquipmentImage(formData: FormData) {
 
 function revalidateApp() {
   revalidatePath("/");
+  revalidatePath("/login");
+  revalidatePath("/setup/house");
+  revalidatePath("/client-inactif");
   revalidatePath("/app");
   revalidatePath("/app/profile");
   revalidatePath("/app/tasks");
@@ -1789,28 +1954,143 @@ export async function ghiblifyUploadedAppBackground() {
 export async function createHouse(formData: FormData) {
   const userId = await requireUser();
   const name = nameSchema.parse(formData.get("name"));
+  const onboarding = parseHouseOnboarding(formData);
+  const isOnboardingCompleted = onboarding.hasProvidedAnswers;
+
+  const existingMembership = await prisma.houseMember.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
+
+  if (existingMembership) {
+    throw new Error("Tu appartiens déjà à une maison.");
+  }
 
   await prisma.house.create({
     data: {
       name,
       createdById: userId,
+      isOnboardingCompleted,
       members: {
         create: {
           userId,
           role: "OWNER",
         },
       },
-      zones: {
-        create: [{ name: "Intérieur" }, { name: "Jardin" }],
-      },
-      categories: {
-        create: [
-          { name: "Entretien" },
-          { name: "Bricolage" },
-          { name: "Administratif" },
-        ],
-      },
+      ...(isOnboardingCompleted
+        ? {
+            zones: {
+              create: onboarding.zoneNames.map((zoneName) => ({ name: zoneName })),
+            },
+            categories: {
+              create: DEFAULT_ONBOARDING_CATEGORY_NAMES.map((categoryName) => ({
+                name: categoryName,
+              })),
+            },
+          }
+        : {}),
+      ...(onboarding.people.length
+        ? {
+            people: {
+              create: onboarding.people.map((person) => ({
+                name: person.name,
+                relation: person.relation,
+              })),
+            },
+          }
+        : {}),
+      ...(onboarding.projectNames.length
+        ? {
+            projects: {
+              create: onboarding.projectNames.map((projectName) => ({
+                name: projectName,
+              })),
+            },
+          }
+        : {}),
+      ...(onboarding.taskTitles.length
+        ? {
+            tasks: {
+              create: onboarding.taskTitles.map((taskTitle) => ({
+                title: taskTitle,
+                createdById: userId,
+              })),
+            },
+          }
+        : {}),
     },
+  });
+
+  revalidateApp();
+  redirect(isOnboardingCompleted ? "/app" : "/setup/house");
+}
+
+export async function completeHouseOnboarding(formData: FormData) {
+  const userId = await requireUser();
+  const houseId = cuidSchema.parse(formData.get("houseId"));
+  const name = nameSchema.parse(formData.get("name"));
+  const onboarding = parseHouseOnboarding(formData);
+
+  if (!onboarding.hasProvidedAnswers) {
+    throw new Error("Complète au moins une réponse d'onboarding.");
+  }
+
+  await requireMembership(userId, houseId);
+
+  await prisma.$transaction(async (tx) => {
+    const updateResult = await tx.house.updateMany({
+      where: { id: houseId, isOnboardingCompleted: false },
+      data: {
+        name,
+        isOnboardingCompleted: true,
+      },
+    });
+
+    if (updateResult.count === 0) {
+      return;
+    }
+
+    await tx.zone.createMany({
+      data: onboarding.zoneNames.map((zoneName) => ({ houseId, name: zoneName })),
+      skipDuplicates: true,
+    });
+
+    await tx.category.createMany({
+      data: DEFAULT_ONBOARDING_CATEGORY_NAMES.map((categoryName) => ({
+        houseId,
+        name: categoryName,
+      })),
+      skipDuplicates: true,
+    });
+
+    if (onboarding.people.length) {
+      await tx.person.createMany({
+        data: onboarding.people.map((person) => ({
+          houseId,
+          name: person.name,
+          relation: person.relation,
+        })),
+      });
+    }
+
+    if (onboarding.projectNames.length) {
+      await tx.project.createMany({
+        data: onboarding.projectNames.map((projectName) => ({
+          houseId,
+          name: projectName,
+        })),
+      });
+    }
+
+    if (onboarding.taskTitles.length) {
+      await tx.task.createMany({
+        data: onboarding.taskTitles.map((taskTitle) => ({
+          houseId,
+          title: taskTitle,
+          createdById: userId,
+        })),
+      });
+    }
   });
 
   revalidateApp();
@@ -2383,6 +2663,22 @@ export async function toggleShoppingListItem(formData: FormData) {
     prisma.shoppingListItem.update({
       where: { id: itemId },
       data: { completed },
+    })
+  );
+
+  revalidateApp();
+}
+
+export async function deleteShoppingListItem(formData: FormData) {
+  const userId = await requireUser();
+  const itemId = cuidSchema.parse(formData.get("itemId"));
+
+  const item = await requireShoppingItemEntity(itemId);
+  await requireMembership(userId, item.shoppingList.houseId);
+
+  await withShoppingTablesGuard(() =>
+    prisma.shoppingListItem.delete({
+      where: { id: itemId },
     })
   );
 
@@ -3368,10 +3664,23 @@ export async function createHouseInvite(formData: FormData) {
 
   if (existingUser) {
     const existingMember = await prisma.houseMember.findFirst({
-      where: { houseId, userId: existingUser.id },
+      where: { userId: existingUser.id },
+      include: {
+        house: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
     if (existingMember) {
-      throw new Error("Cet utilisateur est déjà membre de la maison.");
+      if (existingMember.houseId === houseId) {
+        throw new Error("Cet utilisateur est déjà membre de la maison.");
+      }
+      throw new Error(
+        `Cet utilisateur appartient déjà à la maison "${existingMember.house.name}".`
+      );
     }
   }
 
@@ -3401,16 +3710,16 @@ export async function createHouseInvite(formData: FormData) {
   if (hasEmailServerConfig()) {
     await sendEmail({
       to: email,
-      subject: `Invitation Homanager pour ${house.name}`,
+      subject: `Invitation Soot pour ${house.name}`,
       text: [
-        `${inviterLabel} vous invite à rejoindre la maison "${house.name}" sur Homanager.`,
+        `${inviterLabel} vous invite à rejoindre la maison "${house.name}" sur Soot.`,
         "",
         `Cliquez sur ce lien pour accepter l'invitation: ${inviteUrl}`,
         "",
         "Ce lien expire dans 7 jours.",
       ].join("\n"),
       html: [
-        `<p><strong>${inviterLabel}</strong> vous invite à rejoindre la maison <strong>${house.name}</strong> sur Homanager.</p>`,
+        `<p><strong>${inviterLabel}</strong> vous invite à rejoindre la maison <strong>${house.name}</strong> sur Soot.</p>`,
         `<p><a href="${inviteUrl}">Accepter l'invitation</a></p>`,
         "<p>Ce lien expire dans 7 jours.</p>",
       ].join(""),
@@ -4254,11 +4563,38 @@ export async function acceptHouseInvite(formData: FormData) {
   }
 
   if (invite.status !== "PENDING") {
+    const house = await prisma.house.findUnique({
+      where: { id: invite.houseId },
+      select: {
+        clientStatus: true,
+        isOnboardingCompleted: true,
+      },
+    });
+
+    if (house?.clientStatus === "INACTIVE") {
+      redirect("/client-inactif");
+    }
+
+    if (house && !house.isOnboardingCompleted) {
+      redirect("/setup/house");
+    }
+
     redirect("/app");
   }
 
   if (!email || email.toLowerCase() !== invite.email.toLowerCase()) {
     throw new Error("Email de session différent de l'invitation");
+  }
+
+  const currentMembership = await prisma.houseMember.findFirst({
+    where: { userId },
+    select: { houseId: true },
+  });
+
+  if (currentMembership && currentMembership.houseId !== invite.houseId) {
+    throw new Error(
+      "Tu appartiens déjà à une autre maison. Un compte ne peut être lié qu'à une seule maison."
+    );
   }
 
   await prisma.$transaction(async (tx) => {
@@ -4281,7 +4617,21 @@ export async function acceptHouseInvite(formData: FormData) {
     });
   });
 
+  const house = await prisma.house.findUnique({
+    where: { id: invite.houseId },
+    select: {
+      clientStatus: true,
+      isOnboardingCompleted: true,
+    },
+  });
+
   revalidateApp();
+  if (house?.clientStatus === "INACTIVE") {
+    redirect("/client-inactif");
+  }
+  if (house && !house.isOnboardingCompleted) {
+    redirect("/setup/house");
+  }
   redirect("/app");
 }
 

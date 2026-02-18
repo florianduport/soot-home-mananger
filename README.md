@@ -1,4 +1,4 @@
-# Homanager
+# Soot
 
 Outil de gestion des tâches, projets et informations de la maison.
 
@@ -17,7 +17,7 @@ Ouvre `http://localhost:3005`.
 
 ## Exposer l'app via Cloudflare Tunnel (DNS + accès Internet)
 
-Objectif: exposer `app:3005` sur un sous-domaine Cloudflare (ex: `homanager-test.ton-domaine.com`).
+Objectif: exposer `app:3005` sur un sous-domaine Cloudflare (ex: `soot-test.ton-domaine.com`).
 
 ### Option A - test immédiat (URL temporaire `trycloudflare.com`)
 
@@ -34,15 +34,15 @@ Cloudflared affichera une URL publique temporaire qui redirige vers l'app sur le
 
 ```bash
 cloudflared tunnel login
-cloudflared tunnel create homanager-test
-cloudflared tunnel route dns homanager-test homanager-test.ton-domaine.com
-cloudflared tunnel token homanager-test
+cloudflared tunnel create soot-test
+cloudflared tunnel route dns soot-test soot-test.ton-domaine.com
+cloudflared tunnel token soot-test
 ```
 
 2. Renseigner les variables (dans `.env`):
 
 ```env
-NEXTAUTH_URL="https://homanager-test.ton-domaine.com"
+NEXTAUTH_URL="https://soot-test.ton-domaine.com"
 CLOUDFLARED_TUNNEL_TOKEN="<token_retourne_par_cloudflared_tunnel_token>"
 ```
 

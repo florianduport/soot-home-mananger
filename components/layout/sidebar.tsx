@@ -26,7 +26,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useCloseDetailsOnOutside } from "@/components/ui/use-close-details-on-outside";
 
 const primaryNav = [
-  { href: "/app", label: "Vue globale", icon: Home },
+  { href: "/app", label: "Aujourd’hui", icon: Home },
   { href: "/app/tasks", label: "Tâches", icon: CheckSquare2 },
   { href: "/app/calendar", label: "Calendrier", icon: CalendarDays },
   { href: "/app/budgets", label: "Budgets", icon: Landmark },
@@ -90,7 +90,7 @@ export function Sidebar({
 
   async function handleSignOut() {
     closeUserMenu();
-    await signOut({ callbackUrl: "/" });
+    await signOut({ callbackUrl: "/login" });
   }
 
   function setAppearanceMode(mode: "light" | "dark") {
@@ -169,7 +169,7 @@ export function Sidebar({
             />
           ) : (
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sidebar-primary text-lg font-semibold text-sidebar-primary-foreground">
-              H
+              {houseName.slice(0, 1).toUpperCase() || "S"}
             </div>
           )}
           {!isCollapsed ? (

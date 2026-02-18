@@ -145,7 +145,7 @@ export function BackgroundSettings() {
       <div className="space-y-1">
         <p className="text-sm font-medium">Fond de l&apos;application</p>
         <p className="text-xs text-muted-foreground">
-          Upload de photo, génération Ghibli, ou ghiblification d&apos;une photo uploadée.
+          Upload de photo, génération Ghibli, ou ghiblification d&apos;une photo uploadée pour cette maison.
         </p>
       </div>
 

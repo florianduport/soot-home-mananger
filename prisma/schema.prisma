@@ -12,6 +12,11 @@ enum HouseRole {
   MEMBER
 }
 
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -129,6 +134,8 @@ model House {
   id          String        @id @default(cuid())
   name        String
   iconUrl     String?
+  clientStatus ClientStatus @default(ACTIVE)
+  isOnboardingCompleted Boolean @default(true)
   createdById String
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -151,6 +158,8 @@ model House {
   budgetEntries BudgetEntry[]
   budgetRecurringEntries BudgetRecurringEntry[]
   budgetDocuments BudgetDocument[]
+
+  @@index([clientStatus])
 }
 
 model HouseMember {
@@ -164,6 +173,7 @@ model HouseMember {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([houseId, userId])
+  @@unique([userId])
 }
 
 model HouseInvite {

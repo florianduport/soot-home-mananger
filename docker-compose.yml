@@ -1,26 +1,26 @@
 services:
   db:
     image: postgres:16
-    container_name: homanager-postgres
+    container_name: soot-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: homanager
+      POSTGRES_DB: soot
     ports:
       - "5432:5432"
     volumes:
-      - homanager_db:/var/lib/postgresql/data
+      - soot_db:/var/lib/postgresql/data
 
   app:
     build:
       context: .
-    container_name: homanager-app
+    container_name: soot-app
     restart: unless-stopped
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/homanager?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/soot?schema=public
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3005}
       NEXTAUTH_SECRET: dev-secret-change-me
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -30,7 +30,7 @@ services:
       EMAIL_SERVER_PORT: ${EMAIL_SERVER_PORT:-}
       EMAIL_SERVER_USER: ${EMAIL_SERVER_USER:-}
       EMAIL_SERVER_PASSWORD: ${EMAIL_SERVER_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:-no-reply@homanager.local}
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@soot.local}
     ports:
       - "3005:3005"
     volumes:
@@ -39,7 +39,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: homanager-cloudflared
+    container_name: soot-cloudflared
     restart: unless-stopped
     depends_on:
       - app
@@ -51,7 +51,7 @@ services:
 
   cloudflared-quick:
     image: cloudflare/cloudflared:latest
-    container_name: homanager-cloudflared-quick
+    container_name: soot-cloudflared-quick
     restart: unless-stopped
     depends_on:
       - app
@@ -60,4 +60,4 @@ services:
       - cloudflared-quick
 
 volumes:
-  homanager_db:
+  soot_db:

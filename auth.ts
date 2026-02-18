@@ -17,7 +17,7 @@ export const authOptions: NextAuthOptions = {
         port: 1025,
         secure: false,
       },
-      from: emailServerConfig?.from || "no-reply@homanager.local",
+      from: emailServerConfig?.from || "no-reply@soot.local",
       async sendVerificationRequest({ identifier, url }) {
         if (!hasEmailServer) {
           console.log("\n\nMagic link (dev):", url, "\n\n");
@@ -26,7 +26,7 @@ export const authOptions: NextAuthOptions = {
 
         await sendEmail({
           to: identifier,
-          subject: "Votre lien de connexion Homanager",
+          subject: "Votre lien de connexion Soot",
           text: `Cliquez sur ce lien pour vous connecter: ${url}`,
           html: `<p>Cliquez sur ce lien pour vous connecter:</p><p><a href="${url}">${url}</a></p>`,
         });

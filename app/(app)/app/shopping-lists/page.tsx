@@ -1,8 +1,9 @@
 import {
   addShoppingListItem,
   createShoppingList,
+  deleteShoppingListItem,
 } from "@/app/actions";
-import { Plus, ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart, Trash2 } from "lucide-react";
 import {
   formatEuroFromCents,
   getBudgetRuntimeDelegates,
@@ -17,6 +18,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getHouseData, requireSession } from "@/lib/house";
+
+type ShoppingSearchParams = { [key: string]: string | string[] | undefined };
+
+function resolveSearchParams(
+  searchParams: ShoppingSearchParams | Promise<ShoppingSearchParams>
+) {
+  return typeof (searchParams as Promise<ShoppingSearchParams>)?.then === "function"
+    ? (searchParams as Promise<ShoppingSearchParams>)
+    : Promise.resolve(searchParams as ShoppingSearchParams);
+}
 
 function buildProgressLabel(
   total: number,
@@ -40,7 +51,13 @@ function amountInputFromCents(value?: number | null) {
   return (value / 100).toFixed(2);
 }
 
-export default async function ShoppingListsPage() {
+export default async function ShoppingListsPage({
+  searchParams,
+}: {
+  searchParams: ShoppingSearchParams | Promise<ShoppingSearchParams>;
+}) {
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
+  const createOpen = (resolvedSearchParams.create ?? "").toString() === "1";
   const session = await requireSession();
   const { houseId, shoppingLists, shoppingListsReady } = await getHouseData(
     session.user.id
@@ -137,6 +154,7 @@ export default async function ShoppingListsPage() {
           id="create-shopping-list"
           type="checkbox"
           className="peer sr-only"
+          defaultChecked={createOpen}
         />
         <header className="page-header flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -259,8 +277,8 @@ export default async function ShoppingListsPage() {
                             item.completed ? "opacity-70" : ""
                           }`}
                         >
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="flex min-w-0 items-start gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex min-w-0 items-center gap-3">
                               <ShoppingItemToggle
                                 itemId={item.id}
                                 completed={item.completed}
@@ -282,6 +300,23 @@ export default async function ShoppingListsPage() {
                                   ? "Calcul..."
                                   : formatEuroFromCents(item.estimatedCostCents)}
                               </Badge>
+                              {item.completed ? (
+                                <form action={deleteShoppingListItem}>
+                                  <input type="hidden" name="itemId" value={item.id} />
+                                  <Button
+                                    type="submit"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                                    title="Supprimer l'article"
+                                    aria-label={`Supprimer ${item.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </form>
+                              ) : (
+                                <span aria-hidden="true" className="inline-block h-8 w-8" />
+                              )}
                             </div>
                           </div>
                         </div>

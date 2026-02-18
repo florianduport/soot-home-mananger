@@ -66,11 +66,22 @@ async function ensureMembership(userId: string, houseId: string) {
       userId,
       houseId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      house: {
+        select: {
+          clientStatus: true,
+        },
+      },
+    },
   });
 
   if (!membership) {
     throw new AgentApiError("Accès refusé à cette ressource", 403);
+  }
+
+  if (membership.house.clientStatus === "INACTIVE") {
+    throw new AgentApiError("Client désactivé", 403);
   }
 }
 

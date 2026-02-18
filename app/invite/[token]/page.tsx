@@ -82,7 +82,7 @@ export default async function InvitePage({
                 nouvelle invitation.
               </p>
               <Button asChild variant="outline">
-                <Link href="/">Retour</Link>
+                <Link href="/login">Retour</Link>
               </Button>
             </CardContent>
           </Card>
@@ -108,7 +108,7 @@ export default async function InvitePage({
               <div className="flex flex-col gap-2 sm:flex-row">
                 <SignOutButton />
                 <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/">Retour</Link>
+                  <Link href="/login">Retour</Link>
                 </Button>
               </div>
             </CardContent>

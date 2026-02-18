@@ -1,4 +1,4 @@
-const CACHE_NAME = "homanager-static-v1";
+const CACHE_NAME = "soot-static-v1";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/favicon.ico",

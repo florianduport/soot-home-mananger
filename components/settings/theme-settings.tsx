@@ -21,7 +21,7 @@ export function ThemeSettings() {
       <div className="space-y-1">
         <Label htmlFor="theme-select">Thème global</Label>
         <p className="text-xs text-muted-foreground">
-          Ce choix est appliqué à toute l&apos;application et sauvegardé localement.
+          Ce choix est appliqué à toute l&apos;application pour cette maison.
         </p>
       </div>
       <Select

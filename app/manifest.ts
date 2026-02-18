@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Homanager",
-    short_name: "Homanager",
+    name: "Soot",
+    short_name: "Soot",
     description: "Gestion des tâches et de la maison",
     start_url: "/",
     scope: "/",

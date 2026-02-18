@@ -20,7 +20,7 @@ export function SignOutButton({
     <Button
       variant={variant}
       className={className}
-      onClick={() => signOut({ callbackUrl: "/" })}
+      onClick={() => signOut({ callbackUrl: "/login" })}
       title={collapsed ? "Se déconnecter" : undefined}
     >
       {collapsed ? <LogOut className="h-4 w-4" /> : "Se déconnecter"}
