@@ -10,6 +10,7 @@ import {
 import { getHouseData, requireSession } from "@/lib/house";
 import { ThemeSettings } from "@/components/settings/theme-settings";
 import { BackgroundSettings } from "@/components/settings/background-settings";
+import { LanguageSettings } from "@/components/settings/language-settings";
 import { HouseIconUpload } from "@/components/houses/house-icon-upload";
 import { SettingsEntityManager } from "@/components/settings/settings-entity-manager";
 import { SettingsImportantDatesManager } from "@/components/settings/settings-important-dates-manager";
@@ -61,6 +62,7 @@ export default async function SettingsPage() {
           <CardContent className="space-y-4">
             <ThemeSettings />
             <BackgroundSettings />
+            <LanguageSettings />
           </CardContent>
         </Card>
 
