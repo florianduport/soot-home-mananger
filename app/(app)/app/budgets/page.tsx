@@ -82,6 +82,66 @@ function recurringOccurrenceDate(
   return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
+function formatPercent(value: number) {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "percent",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function buildMonthlyItems(
+  monthKey: string,
+  entries: Array<{
+    id: string;
+    type: "INCOME" | "EXPENSE";
+    source: "MANUAL" | "RECURRING" | "SHOPPING_LIST" | "DOCUMENT";
+    label: string;
+    amountCents: number;
+    occurredOn: Date;
+    isForecast: boolean;
+    notes: string | null;
+    document: { path: string } | null;
+  }>,
+  recurringEntries: Array<{
+    id: string;
+    type: "INCOME" | "EXPENSE";
+    label: string;
+    amountCents: number;
+    dayOfMonth: number | null;
+    notes: string | null;
+    startMonth: Date;
+    endMonth: Date | null;
+  }>,
+  isForecast: boolean
+): BudgetListItem[] {
+  return [
+    ...entries.map((entry) => ({
+      id: entry.id,
+      persisted: true,
+      type: entry.type,
+      source: entry.source,
+      label: entry.label,
+      amountCents: entry.amountCents,
+      occurredOn: entry.occurredOn,
+      isForecast: entry.isForecast,
+      notes: entry.notes,
+      documentPath: entry.document?.path ?? null,
+    })),
+    ...recurringEntries.map((entry) => ({
+      id: `recurring-${entry.id}-${monthKey}`,
+      persisted: false,
+      type: entry.type,
+      source: "RECURRING" as const,
+      label: entry.label,
+      amountCents: entry.amountCents,
+      occurredOn: recurringOccurrenceDate(monthKey, entry.dayOfMonth),
+      isForecast,
+      notes: entry.notes,
+      documentPath: null,
+    })),
+  ];
+}
+
 export default async function BudgetsPage({
   searchParams,
 }: {
@@ -100,8 +160,14 @@ export default async function BudgetsPage({
   const nextMonth = shiftMonthKey(selectedMonth, 1);
   const monthEndInclusive = new Date(end.getTime() - 1);
   const nowMonth = toMonthKey(new Date());
-  const recurringIsForecast = selectedMonth > nowMonth;
   const defaultEntryDate = dateInputLabel(start);
+  const insightsMonths = 6;
+  const trendMonths = Array.from({ length: insightsMonths }, (_, index) =>
+    shiftMonthKey(selectedMonth, -(insightsMonths - 1 - index))
+  );
+  const { start: trendStart } = monthRangeFromKey(trendMonths[0]);
+  const { end: trendEnd } = monthRangeFromKey(selectedMonth);
+  const trendEndInclusive = new Date(trendEnd.getTime() - 1);
 
   let budgetEntries: Array<{
     id: string;
@@ -140,8 +206,8 @@ export default async function BudgetsPage({
           where: {
             houseId,
             occurredOn: {
-              gte: start,
-              lt: end,
+              gte: trendStart,
+              lt: trendEnd,
             },
           },
           orderBy: [{ occurredOn: "asc" }, { createdAt: "asc" }],
@@ -157,13 +223,13 @@ export default async function BudgetsPage({
           where: {
             houseId,
             startMonth: {
-              lte: monthEndInclusive,
+              lte: trendEndInclusive,
             },
             OR: [
               { endMonth: null },
               {
                 endMonth: {
-                  gte: start,
+                  gte: trendStart,
                 },
               },
             ],
@@ -205,32 +271,15 @@ export default async function BudgetsPage({
     );
   }
 
-  const monthlyItems: BudgetListItem[] = [
-    ...budgetEntries.map((entry) => ({
-      id: entry.id,
-      persisted: true,
-      type: entry.type,
-      source: entry.source,
-      label: entry.label,
-      amountCents: entry.amountCents,
-      occurredOn: entry.occurredOn,
-      isForecast: entry.isForecast,
-      notes: entry.notes,
-      documentPath: entry.document?.path ?? null,
-    })),
-    ...recurringEntries.map((entry) => ({
-      id: `recurring-${entry.id}-${selectedMonth}`,
-      persisted: false,
-      type: entry.type,
-      source: "RECURRING" as const,
-      label: entry.label,
-      amountCents: entry.amountCents,
-      occurredOn: recurringOccurrenceDate(selectedMonth, entry.dayOfMonth),
-      isForecast: recurringIsForecast,
-      notes: entry.notes,
-      documentPath: null,
-    })),
-  ].sort((a, b) => {
+  const selectedMonthEntries = budgetEntries.filter(
+    (entry) => entry.occurredOn >= start && entry.occurredOn < end
+  );
+  const monthlyItems = buildMonthlyItems(
+    selectedMonth,
+    selectedMonthEntries,
+    recurringEntries,
+    selectedMonth > nowMonth
+  ).sort((a, b) => {
     if (a.occurredOn.getTime() === b.occurredOn.getTime()) {
       return a.label.localeCompare(b.label, "fr");
     }
@@ -252,6 +301,72 @@ export default async function BudgetsPage({
     if (amountCents <= balanceCents) return "text-amber-500";
     return "text-rose-600";
   };
+  const trendData = trendMonths.map((monthKey) => {
+    const { start: monthStart, end: monthEnd } = monthRangeFromKey(monthKey);
+    const entries = budgetEntries.filter(
+      (entry) => entry.occurredOn >= monthStart && entry.occurredOn < monthEnd
+    );
+    const items = buildMonthlyItems(
+      monthKey,
+      entries,
+      recurringEntries,
+      monthKey > nowMonth
+    );
+    const itemsWithAmounts = items.filter((item) => item.amountCents > 0);
+    const income = itemsWithAmounts
+      .filter((item) => item.type === "INCOME")
+      .reduce((sum, item) => sum + item.amountCents, 0);
+    const expense = itemsWithAmounts
+      .filter((item) => item.type === "EXPENSE")
+      .reduce((sum, item) => sum + item.amountCents, 0);
+    return {
+      monthKey,
+      income,
+      expense,
+      balance: income - expense,
+      label: monthLabel(monthKey),
+    };
+  });
+  const maxExpenseCents = Math.max(
+    1,
+    ...trendData.map((item) => item.expense)
+  );
+  const selectedTrend = trendData[trendData.length - 1];
+  const previousTrend = trendData[trendData.length - 2];
+  const expenseDelta = previousTrend
+    ? selectedTrend.expense - previousTrend.expense
+    : 0;
+  const incomeDelta = previousTrend
+    ? selectedTrend.income - previousTrend.income
+    : 0;
+  const expenseDeltaPercent = previousTrend?.expense
+    ? expenseDelta / previousTrend.expense
+    : null;
+  const incomeDeltaPercent = previousTrend?.income
+    ? incomeDelta / previousTrend.income
+    : null;
+  const rollingAverageSource = trendData
+    .slice(Math.max(0, trendData.length - 3))
+    .map((item) => item.expense);
+  const rollingAverageExpense =
+    rollingAverageSource.reduce((sum, item) => sum + item, 0) /
+    Math.max(1, rollingAverageSource.length);
+  const overspendAlerts = [
+    totalExpenseCents > totalIncomeCents
+      ? `Dépenses supérieures aux revenus de ${formatEuroFromCents(
+          totalExpenseCents - totalIncomeCents
+        )}`
+      : null,
+    expenseDeltaPercent && expenseDeltaPercent > 0.2
+      ? `Dépenses en hausse de ${formatPercent(expenseDeltaPercent)} vs mois précédent`
+      : null,
+    rollingAverageExpense > 0 &&
+    totalExpenseCents > rollingAverageExpense * 1.15
+      ? `Dépenses supérieures de ${formatPercent(
+          totalExpenseCents / rollingAverageExpense - 1
+        )} à la moyenne des 3 derniers mois`
+      : null,
+  ].filter(Boolean);
 
   return (
     <>
@@ -288,6 +403,134 @@ export default async function BudgetsPage({
             </Button>
           </div>
         </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Insights</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-end justify-between gap-2">
+              {trendData.map((item) => {
+                const height = Math.max(
+                  12,
+                  Math.round((item.expense / maxExpenseCents) * 72)
+                );
+                const isSelected = item.monthKey === selectedMonth;
+                return (
+                  <div key={item.monthKey} className="flex w-full flex-col items-center">
+                    <div
+                      className={`w-full rounded-full ${
+                        isSelected ? "bg-rose-500/80" : "bg-muted"
+                      }`}
+                      style={{ height }}
+                      title={`${item.label}: ${formatExpenseEuroFromCents(
+                        item.expense
+                      )}`}
+                    />
+                    <span className="mt-2 text-[11px] text-muted-foreground">
+                      {item.label.split(" ")[0]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Tendances des 6 derniers mois (dépenses).
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Variations</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Dépenses</p>
+                <p className="text-xs text-muted-foreground">
+                  {previousTrend ? "Vs mois précédent" : "Pas de mois précédent"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold">
+                  {formatExpenseEuroFromCents(totalExpenseCents)}
+                </p>
+                <p
+                  className={`text-xs ${
+                    expenseDelta >= 0 ? "text-rose-600" : "text-emerald-600"
+                  }`}
+                >
+                  {previousTrend
+                    ? `${expenseDelta >= 0 ? "+" : "-"}${formatEuroFromCents(
+                        Math.abs(expenseDelta)
+                      )} (${formatPercent(Math.abs(expenseDeltaPercent ?? 0))})`
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Revenus</p>
+                <p className="text-xs text-muted-foreground">
+                  {previousTrend ? "Vs mois précédent" : "Pas de mois précédent"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-emerald-600">
+                  {formatEuroFromCents(totalIncomeCents)}
+                </p>
+                <p
+                  className={`text-xs ${
+                    incomeDelta >= 0 ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {previousTrend
+                    ? `${incomeDelta >= 0 ? "+" : ""}${formatEuroFromCents(
+                        incomeDelta
+                      )} (${formatPercent(Math.abs(incomeDeltaPercent ?? 0))})`
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t pt-3">
+              <div>
+                <p className="font-medium">Solde</p>
+                <p className="text-xs text-muted-foreground">Du mois sélectionné</p>
+              </div>
+              <p
+                className={`font-semibold ${
+                  balanceCents >= 0 ? "text-emerald-600" : "text-rose-600"
+                }`}
+              >
+                {formatEuroFromCents(balanceCents)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Alertes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {overspendAlerts.length ? (
+              <ul className="space-y-3 text-sm">
+                {overspendAlerts.map((alert) => (
+                  <li key={alert} className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                    <p className="font-medium text-rose-700">{alert}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Aucune alerte de dépassement détectée.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
