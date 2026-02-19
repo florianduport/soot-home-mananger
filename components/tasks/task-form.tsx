@@ -14,6 +14,7 @@ export type TaskFormData = {
   categories: { id: string; name: string }[];
   projects: { id: string; name: string; imageUrl?: string | null }[];
   equipments: { id: string; name: string; imageUrl?: string | null }[];
+  vendors: { id: string; name: string; company?: string | null }[];
   animals: { id: string; name: string; imageUrl?: string | null }[];
   people: { id: string; name: string; imageUrl?: string | null }[];
   members: {
@@ -31,6 +32,7 @@ export function TaskForm({
   categories,
   projects,
   equipments,
+  vendors,
   animals,
   people,
   members,
@@ -197,6 +199,25 @@ export function TaskForm({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
+          <label className="text-sm font-medium" htmlFor="vendorId">
+            Prestataire
+          </label>
+          <select
+            id="vendorId"
+            name="vendorId"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+            defaultValue=""
+          >
+            <option value="">—</option>
+            {vendors.map((vendor) => (
+              <option key={vendor.id} value={vendor.id}>
+                {vendor.name}
+                {vendor.company ? ` · ${vendor.company}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="assigneeId">
             Assigner à
           </label>
@@ -212,6 +233,8 @@ export function TaskForm({
             }))}
           />
         </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="animalId">
             Animal

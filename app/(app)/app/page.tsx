@@ -51,6 +51,7 @@ export default async function OverviewPage() {
     animalImageUrl: task.animal?.imageUrl ?? null,
     person: task.person?.name ?? null,
     personImageUrl: task.person?.imageUrl ?? null,
+    vendor: task.vendor?.name ?? null,
     recurring: Boolean(task.parentId),
     assignee: task.assignee?.name ?? task.assignee?.email ?? null,
     assigneeId: task.assigneeId ?? null,

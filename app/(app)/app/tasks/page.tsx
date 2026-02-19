@@ -30,6 +30,7 @@ export default async function TasksPage({
     categories,
     animals,
     people,
+    vendors,
     equipments,
     projects,
     members,
@@ -87,6 +88,7 @@ export default async function TasksPage({
     animalImageUrl: task.animal?.imageUrl ?? null,
     person: task.person?.name ?? null,
     personImageUrl: task.person?.imageUrl ?? null,
+    vendor: task.vendor?.name ?? null,
     recurring: Boolean(task.parentId),
     assignee: task.assignee?.name ?? task.assignee?.email ?? null,
     assigneeId: task.assigneeId ?? null,
@@ -113,7 +115,9 @@ export default async function TasksPage({
     if (categoryFilter && task.category !== categoryFilter) return false;
     if (assigneeFilter && task.assigneeId !== assigneeFilter) return false;
     if (query) {
-      const haystack = `${task.title} ${task.zone ?? ""} ${task.category ?? ""}`.toLowerCase();
+      const haystack = `${task.title} ${task.zone ?? ""} ${task.category ?? ""} ${
+        task.vendor ?? ""
+      }`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;
@@ -165,6 +169,7 @@ export default async function TasksPage({
                   ...equipment,
                   imageUrl: equipmentImageMap.get(equipment.id) ?? null,
                 }))}
+                vendors={vendors}
                 animals={animals}
                 people={people}
                 members={members.map((member) => member.user)}

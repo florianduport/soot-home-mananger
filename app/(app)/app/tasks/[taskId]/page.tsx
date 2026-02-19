@@ -98,6 +98,7 @@ export default async function TaskDetailPage({
       equipment: true,
       animal: true,
       person: true,
+      vendor: true,
       parent: true,
       assignee: true,
       comments: {
@@ -121,7 +122,7 @@ export default async function TaskDetailPage({
   const taskImageGenerating = await isTaskImageGenerating(task.id);
   const hasTaskIllustration = taskImageGenerating || Boolean(task.imageUrl);
 
-  const [members, zones, categories, projects, equipments, animals, people] =
+  const [members, zones, categories, projects, equipments, animals, people, vendors] =
     await prisma.$transaction([
       prisma.houseMember.findMany({
         where: { houseId: task.houseId },
@@ -134,6 +135,7 @@ export default async function TaskDetailPage({
       prisma.equipment.findMany({ where: { houseId: task.houseId } }),
       prisma.animal.findMany({ where: { houseId: task.houseId } }),
       prisma.person.findMany({ where: { houseId: task.houseId } }),
+      prisma.vendor.findMany({ where: { houseId: task.houseId }, orderBy: { name: "asc" } }),
     ]);
   const projectsWithImages = await Promise.all(
     projects.map(async (project) => ({
@@ -217,6 +219,13 @@ export default async function TaskDetailPage({
           imageUrl: task.equipmentId
             ? equipmentImageMap.get(task.equipmentId) ?? null
             : null,
+        }
+      : null,
+    task.vendor?.name
+      ? {
+          label: "Prestataire",
+          value: task.vendor.name,
+          imageUrl: null,
         }
       : null,
   ].filter(Boolean) as Array<{ label: string; value: string; imageUrl: string | null }>;
@@ -462,6 +471,22 @@ export default async function TaskDetailPage({
                         imageUrl: equipment.imageUrl ?? null,
                       }))}
                     />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm text-muted-foreground">Prestataire</label>
+                    <select
+                      name="vendorId"
+                      defaultValue={task.vendorId ?? task.vendor?.id ?? ""}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    >
+                      <option value="">—</option>
+                      {vendors.map((vendor) => (
+                        <option key={vendor.id} value={vendor.id}>
+                          {vendor.name}
+                          {vendor.company ? ` · ${vendor.company}` : ""}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Animal</label>
