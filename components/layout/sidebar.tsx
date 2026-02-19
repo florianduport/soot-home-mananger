@@ -17,6 +17,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShoppingCart,
+  Store,
   Settings,
   Sun,
   UserRound,
@@ -33,6 +34,7 @@ const primaryNav = [
   { href: "/app/shopping-lists", label: "Listes d'achats", icon: ShoppingCart },
   { href: "/app/projects", label: "Projets", icon: Hammer },
   { href: "/app/equipment", label: "Équipements", icon: Package },
+  { href: "/app/marketplace", label: "Marketplace", icon: Store },
 ];
 
 const secondaryNav = [{ href: "/app/settings", label: "Réglages", icon: Settings }];

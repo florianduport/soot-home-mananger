@@ -4817,3 +4817,82 @@ export async function generateSuggestedTasks(formData: FormData) {
 
   revalidateApp();
 }
+
+export async function importMarketplaceTemplate(formData: FormData) {
+  const userId = await requireUser();
+  const houseId = z.string().cuid().parse(formData.get("houseId"));
+  const templateId = z.string().min(1).parse(formData.get("templateId"));
+
+  await requireMembership(userId, houseId);
+
+  const { getMarketplaceTemplate } = await import("@/lib/marketplace-templates");
+  const template = getMarketplaceTemplate(templateId);
+
+  if (!template) {
+    throw new Error("Modèle introuvable");
+  }
+
+  const baseDate = new Date();
+  baseDate.setHours(12, 0, 0, 0);
+  const dueDate =
+    typeof template.defaultDueOffsetDays === "number"
+      ? new Date(baseDate.getTime() + template.defaultDueOffsetDays * 24 * 60 * 60 * 1000)
+      : null;
+
+  if (template.recurrenceUnit) {
+    const createdTemplate = await prisma.task.create({
+      data: {
+        houseId,
+        title: template.title,
+        description: template.description,
+        dueDate,
+        isTemplate: true,
+        recurrenceUnit: template.recurrenceUnit,
+        recurrenceInterval: template.recurrenceInterval ?? 1,
+        reminderOffsetDays: template.reminderOffsetDays,
+        createdById: userId,
+      },
+    });
+
+    const instance = await prisma.task.create({
+      data: {
+        houseId,
+        title: template.title,
+        description: template.description,
+        dueDate,
+        reminderOffsetDays: template.reminderOffsetDays,
+        createdById: userId,
+        parentId: createdTemplate.id,
+      },
+    });
+
+    await enqueueTaskIllustration({
+      houseId,
+      userId,
+      taskId: instance.id,
+      title: template.title,
+      description: template.description,
+    });
+  } else {
+    const created = await prisma.task.create({
+      data: {
+        houseId,
+        title: template.title,
+        description: template.description,
+        dueDate,
+        reminderOffsetDays: template.reminderOffsetDays,
+        createdById: userId,
+      },
+    });
+
+    await enqueueTaskIllustration({
+      houseId,
+      userId,
+      taskId: created.id,
+      title: template.title,
+      description: template.description,
+    });
+  }
+
+  revalidateApp();
+}
