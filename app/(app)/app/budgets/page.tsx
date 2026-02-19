@@ -114,6 +114,14 @@ function buildMonthlyItems(
   }>,
   isForecast: boolean
 ): BudgetListItem[] {
+  const { start: monthStart, end: monthEnd } = monthRangeFromKey(monthKey);
+  const monthEndInclusive = new Date(monthEnd.getTime() - 1);
+  const activeRecurringEntries = recurringEntries.filter((entry) => {
+    if (entry.startMonth > monthEndInclusive) return false;
+    if (!entry.endMonth) return true;
+    return entry.endMonth >= monthStart;
+  });
+
   return [
     ...entries.map((entry) => ({
       id: entry.id,
@@ -127,7 +135,7 @@ function buildMonthlyItems(
       notes: entry.notes,
       documentPath: entry.document?.path ?? null,
     })),
-    ...recurringEntries.map((entry) => ({
+    ...activeRecurringEntries.map((entry) => ({
       id: `recurring-${entry.id}-${monthKey}`,
       persisted: false,
       type: entry.type,
