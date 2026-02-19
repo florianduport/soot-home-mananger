@@ -549,7 +549,14 @@ async function requireShoppingItemEntity(itemId: string) {
 
 async function resolveRelationId(
   houseId: string,
-  model: "zone" | "category" | "animal" | "person" | "project" | "equipment",
+  model:
+    | "zone"
+    | "category"
+    | "animal"
+    | "person"
+    | "project"
+    | "equipment"
+    | "vendor",
   id: string | undefined
 ) {
   if (!id) return null;
@@ -583,6 +590,13 @@ async function resolveRelationId(
   }
   if (model === "equipment") {
     const record = await prisma.equipment.findFirst({
+      where: { id, houseId },
+      select: { id: true },
+    });
+    return record ? id : null;
+  }
+  if (model === "vendor") {
+    const record = await prisma.vendor.findFirst({
       where: { id, houseId },
       select: { id: true },
     });
@@ -632,6 +646,23 @@ function parseMonthInput(value: FormDataEntryValue | null, fieldName: string) {
 function parseOptionalMonthInput(value: FormDataEntryValue | null, fieldName: string) {
   if (!value) return null;
   return parseMonthInput(value, fieldName);
+}
+
+function parseTagsInput(value?: string | null) {
+  if (!value) return [];
+  const tags = value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const tag of tags) {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(tag);
+  }
+  return unique.slice(0, 12);
 }
 
 function parseAmountCentsInput(value: FormDataEntryValue | null, fieldName: string) {
@@ -2429,6 +2460,99 @@ export async function createPerson(formData: FormData) {
   revalidateApp();
 }
 
+export async function createVendor(formData: FormData) {
+  const userId = await requireUser();
+  const houseId = cuidSchema.parse(formData.get("houseId"));
+  const name = nameSchema.parse(formData.get("name"));
+  const company = optionalString.parse(formData.get("company")?.toString());
+  const emailRaw = optionalString.parse(formData.get("email")?.toString());
+  const email = emailRaw ? emailSchema.parse(emailRaw) : null;
+  const phone = optionalString.parse(formData.get("phone")?.toString());
+  const website = optionalString.parse(formData.get("website")?.toString());
+  const address = optionalString.parse(formData.get("address")?.toString());
+  const notes = optionalString.parse(formData.get("notes")?.toString());
+  const ratingRaw = optionalNumber.parse(formData.get("rating")?.toString());
+  const rating = Number.isFinite(ratingRaw)
+    ? Math.max(1, Math.min(5, Math.round(ratingRaw as number)))
+    : null;
+  const tags = parseTagsInput(optionalString.parse(formData.get("tags")?.toString()));
+
+  await requireOwner(userId, houseId);
+
+  await prisma.vendor.create({
+    data: {
+      houseId,
+      name,
+      company,
+      email,
+      phone,
+      website,
+      address,
+      notes,
+      rating,
+      tags,
+    },
+  });
+
+  revalidateApp();
+}
+
+export async function updateVendor(formData: FormData) {
+  const userId = await requireUser();
+  const vendorId = cuidSchema.parse(formData.get("vendorId"));
+  const name = nameSchema.parse(formData.get("name"));
+  const company = optionalString.parse(formData.get("company")?.toString());
+  const emailRaw = optionalString.parse(formData.get("email")?.toString());
+  const email = emailRaw ? emailSchema.parse(emailRaw) : null;
+  const phone = optionalString.parse(formData.get("phone")?.toString());
+  const website = optionalString.parse(formData.get("website")?.toString());
+  const address = optionalString.parse(formData.get("address")?.toString());
+  const notes = optionalString.parse(formData.get("notes")?.toString());
+  const ratingRaw = optionalNumber.parse(formData.get("rating")?.toString());
+  const rating = Number.isFinite(ratingRaw)
+    ? Math.max(1, Math.min(5, Math.round(ratingRaw as number)))
+    : null;
+  const tags = parseTagsInput(optionalString.parse(formData.get("tags")?.toString()));
+
+  const vendor = await requireHouseEntity(
+    await prisma.vendor.findUnique({ where: { id: vendorId } })
+  );
+  await requireOwner(userId, vendor.houseId);
+
+  await prisma.vendor.update({
+    where: { id: vendorId },
+    data: {
+      name,
+      company,
+      email,
+      phone,
+      website,
+      address,
+      notes,
+      rating,
+      tags,
+    },
+  });
+
+  revalidateApp();
+  revalidatePath(`/app/vendors/${vendorId}`);
+}
+
+export async function deleteVendor(formData: FormData) {
+  const userId = await requireUser();
+  const vendorId = cuidSchema.parse(formData.get("vendorId"));
+
+  const vendor = await requireHouseEntity(
+    await prisma.vendor.findUnique({ where: { id: vendorId } })
+  );
+  await requireOwner(userId, vendor.houseId);
+
+  await prisma.vendor.delete({ where: { id: vendorId } });
+
+  revalidateApp();
+  revalidatePath("/app/vendors");
+}
+
 export async function createProject(formData: FormData) {
   const userId = await requireUser();
   const houseId = z.string().cuid().parse(formData.get("houseId"));
@@ -2971,6 +3095,11 @@ export async function uploadBudgetDocumentAndCreateExpense(formData: FormData) {
 
   const userId = await requireUser();
   const houseId = cuidSchema.parse(formData.get("houseId"));
+  const vendorId = await resolveRelationId(
+    houseId,
+    "vendor",
+    optionalString.parse(formData.get("vendorId")?.toString())
+  );
   const file = formData.get("document");
   const fallbackMonthRaw = formData.get("fallbackMonth")?.toString().trim() || null;
   const forceForecast = formData.get("forceForecast")?.toString() === "true";
@@ -3038,6 +3167,20 @@ export async function uploadBudgetDocumentAndCreateExpense(formData: FormData) {
     .filter(Boolean)
     .join("\n");
   const notes = notesChunks ? notesChunks.slice(0, 2000) : null;
+  const supplierLookup = extraction.supplier?.trim() || null;
+  const matchedVendor = supplierLookup
+    ? await prisma.vendor.findFirst({
+        where: {
+          houseId,
+          OR: [
+            { name: { equals: supplierLookup, mode: "insensitive" } },
+            { company: { equals: supplierLookup, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      })
+    : null;
+  const resolvedVendorId = vendorId ?? matchedVendor?.id ?? null;
 
   await withBudgetTablesGuard(() =>
     prisma.$transaction(async (tx) => {
@@ -3045,6 +3188,7 @@ export async function uploadBudgetDocumentAndCreateExpense(formData: FormData) {
         data: {
           houseId,
           uploadedById: userId,
+          vendorId: resolvedVendorId,
           name: file.name,
           mimeType,
           sizeBytes: file.size,
@@ -3797,6 +3941,11 @@ export async function createTask(formData: FormData) {
     "equipment",
     optionalString.parse(formData.get("equipmentId")?.toString())
   );
+  const vendorId = await resolveRelationId(
+    houseId,
+    "vendor",
+    optionalString.parse(formData.get("vendorId")?.toString())
+  );
   const assigneeId = optionalString.parse(formData.get("assigneeId")?.toString());
   const reminderOffsetDaysRaw = formData.get("reminderOffsetDays")?.toString();
   const reminderOffsetDays = reminderOffsetDaysRaw
@@ -3849,6 +3998,7 @@ export async function createTask(formData: FormData) {
         personId,
         projectId,
         equipmentId,
+        vendorId,
       },
     });
 
@@ -3870,6 +4020,7 @@ export async function createTask(formData: FormData) {
         personId,
         projectId,
         equipmentId,
+        vendorId,
         parentId: template.id,
       },
     });
@@ -3902,6 +4053,7 @@ export async function createTask(formData: FormData) {
         personId,
         projectId,
         equipmentId,
+        vendorId,
       },
     });
 
@@ -4060,6 +4212,11 @@ export async function updateTask(formData: FormData) {
     "equipment",
     optionalString.parse(formData.get("equipmentId")?.toString())
   );
+  const vendorId = await resolveRelationId(
+    task.houseId,
+    "vendor",
+    optionalString.parse(formData.get("vendorId")?.toString())
+  );
 
   const assigneeIdRaw = optionalString.parse(formData.get("assigneeId")?.toString());
   let assigneeId: string | null = null;
@@ -4107,6 +4264,7 @@ export async function updateTask(formData: FormData) {
           personId,
           projectId,
           equipmentId,
+          vendorId,
         },
       });
 
@@ -4124,6 +4282,7 @@ export async function updateTask(formData: FormData) {
             personId,
             projectId,
             equipmentId,
+            vendorId,
             assigneeId,
             status,
             parentId: templateId,
@@ -4173,6 +4332,7 @@ export async function updateTask(formData: FormData) {
               personId,
               projectId,
               equipmentId,
+              vendorId,
             },
             select: { id: true },
           });
@@ -4190,6 +4350,7 @@ export async function updateTask(formData: FormData) {
           personId,
           projectId,
           equipmentId,
+          vendorId,
           assigneeId,
           status,
           parentId: template.id,
@@ -4217,6 +4378,7 @@ export async function updateTask(formData: FormData) {
         personId,
         projectId,
         equipmentId,
+        vendorId,
         assigneeId,
         status,
         parentId: null,
@@ -4272,6 +4434,7 @@ export async function updateTask(formData: FormData) {
         personId,
         projectId,
         equipmentId,
+        vendorId,
         assigneeId,
         status,
       },
