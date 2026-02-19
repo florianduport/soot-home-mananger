@@ -309,6 +309,13 @@ function isEstimatedCostFieldUnavailableError(error: unknown) {
   return false;
 }
 
+function isNotificationTableUnavailableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
 async function withShoppingTablesGuard<T>(action: () => Promise<T>) {
   try {
     return await action();
@@ -1879,6 +1886,7 @@ function revalidateApp() {
   revalidatePath("/app/budgets");
   revalidatePath("/app/shopping-lists");
   revalidatePath("/app/settings");
+  revalidatePath("/app/notifications");
 }
 
 export async function uploadAppBackground(formData: FormData) {
@@ -5058,4 +5066,49 @@ export async function importMarketplaceTemplate(formData: FormData) {
   }
 
   revalidateApp();
+}
+
+export async function markNotificationRead(formData: FormData) {
+  const userId = await requireUser();
+  const notificationId = z.string().cuid().parse(formData.get("notificationId"));
+
+  try {
+    await prisma.notification.updateMany({
+      where: {
+        id: notificationId,
+        userId,
+      },
+      data: {
+        readAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (!isNotificationTableUnavailableError(error)) {
+      throw error;
+    }
+  }
+
+  revalidatePath("/app/notifications");
+}
+
+export async function markAllNotificationsRead() {
+  const userId = await requireUser();
+
+  try {
+    await prisma.notification.updateMany({
+      where: {
+        userId,
+        readAt: null,
+      },
+      data: {
+        readAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (!isNotificationTableUnavailableError(error)) {
+      throw error;
+    }
+  }
+
+  revalidatePath("/app/notifications");
 }

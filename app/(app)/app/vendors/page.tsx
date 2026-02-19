@@ -70,7 +70,7 @@ export default async function VendorsPage() {
           />
           <p className="text-sm text-muted-foreground">Prestataires</p>
           <h1 className="text-2xl font-semibold sm:whitespace-nowrap">
-            Réseau d'artisans et d'entreprises
+            Réseau d&apos;artisans et d&apos;entreprises
           </h1>
         </header>
       </section>
@@ -78,7 +78,7 @@ export default async function VendorsPage() {
       <section className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Vue d'ensemble</CardTitle>
+            <CardTitle>Vue d&apos;ensemble</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
             <div className="flex items-center justify-between">
@@ -95,7 +95,7 @@ export default async function VendorsPage() {
             </div>
             <p>
               Associe un prestataire aux tâches et aux justificatifs pour retrouver
-              rapidement l'historique de ses interventions.
+              rapidement l&apos;historique de ses interventions.
             </p>
           </CardContent>
         </Card>

@@ -37,6 +37,15 @@ enum InviteStatus {
   EXPIRED
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_COMMENTED
+  TASK_STATUS
+  TASK_REMINDER
+  PROJECT_CREATED
+  INVITE_ACCEPTED
+}
+
 enum AgentMessageRole {
   USER
   ASSISTANT
@@ -92,6 +101,7 @@ model User {
   createdBudgetEntries BudgetEntry[] @relation("BudgetEntryCreator")
   createdBudgetRecurringEntries BudgetRecurringEntry[] @relation("BudgetRecurringCreator")
   uploadedBudgetDocuments BudgetDocument[] @relation("BudgetDocumentUploader")
+  notifications  Notification[]
 }
 
 model Account {
@@ -159,8 +169,29 @@ model House {
   budgetRecurringEntries BudgetRecurringEntry[]
   budgetDocuments BudgetDocument[]
   vendors     Vendor[]
+  notifications Notification[]
 
   @@index([clientStatus])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  houseId     String
+  type        NotificationType
+  title       String
+  body        String?
+  linkUrl     String?
+  dedupeKey   String?          @unique
+  readAt      DateTime?
+  emailSentAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  house       House            @relation(fields: [houseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([houseId, createdAt])
 }
 
 model HouseMember {
