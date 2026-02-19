@@ -80,6 +80,31 @@ const IN_SCOPE_KEYWORDS = [
   "probleme",
 ];
 
+const ALLOWED_SHORT_MESSAGES = new Set([
+  "ok",
+  "okay",
+  "d accord",
+  "merci",
+  "merci beaucoup",
+  "merci a toi",
+  "super",
+  "parfait",
+  "cool",
+  "top",
+  "bonjour",
+  "salut",
+  "hello",
+  "bonsoir",
+  "bonne nuit",
+  "au revoir",
+  "a bientot",
+  "bye",
+  "ca marche",
+  "ca fonctionne",
+  "c est bon",
+  "c est parfait",
+]);
+
 const allowedMimeTypes = new Set([
   "application/pdf",
   "image/jpeg",
@@ -163,6 +188,7 @@ function normalizeForScopeCheck(message: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -170,6 +196,7 @@ function normalizeForScopeCheck(message: string) {
 function isInScopeMessage(message: string) {
   const normalized = normalizeForScopeCheck(message);
   if (!normalized) return true;
+  if (ALLOWED_SHORT_MESSAGES.has(normalized)) return true;
   return IN_SCOPE_KEYWORDS.some((keyword) => normalized.includes(keyword));
 }
 
