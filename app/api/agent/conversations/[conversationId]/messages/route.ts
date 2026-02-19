@@ -21,6 +21,64 @@ const jsonPayloadSchema = z.object({
 
 const MAX_ATTACHMENTS = 8;
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+const OUT_OF_SCOPE_REPLY =
+  "Je suis Soot, l'assistant de maison et de l'app Soot. Je peux aider sur les tâches, listes d'achats, projets, équipements, budget, zones, personnes/animaux, entretien ou réglages de l'app. Pour le reste, je ne peux pas répondre. Reformule avec un besoin lié à la maison ou à l'application.";
+
+const IN_SCOPE_KEYWORDS = [
+  "maison",
+  "domicile",
+  "logement",
+  "appartement",
+  "jardin",
+  "cuisine",
+  "salon",
+  "chambre",
+  "bureau",
+  "salle de bain",
+  "garage",
+  "cave",
+  "grenier",
+  "balcon",
+  "terrasse",
+  "piscine",
+  "chauffage",
+  "clim",
+  "electricite",
+  "plomberie",
+  "fuite",
+  "travaux",
+  "reparation",
+  "entretien",
+  "menage",
+  "nettoyage",
+  "courses",
+  "achat",
+  "liste",
+  "budget",
+  "depense",
+  "revenu",
+  "facture",
+  "rendez-vous",
+  "calendrier",
+  "tache",
+  "routine",
+  "projet",
+  "equipement",
+  "zone",
+  "categorie",
+  "animal",
+  "personne",
+  "famille",
+  "soot",
+  "application",
+  "app",
+  "parametre",
+  "reglage",
+  "compte",
+  "connexion",
+  "bug",
+  "probleme",
+];
 
 const allowedMimeTypes = new Set([
   "application/pdf",
@@ -98,6 +156,21 @@ function getAgentDelegates() {
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function normalizeForScopeCheck(message: string) {
+  return message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isInScopeMessage(message: string) {
+  const normalized = normalizeForScopeCheck(message);
+  if (!normalized) return true;
+  return IN_SCOPE_KEYWORDS.some((keyword) => normalized.includes(keyword));
 }
 
 function inferExtension(mimeType: string) {
@@ -328,21 +401,25 @@ export async function POST(request: Request, context: RouteContext) {
     let assistantText = "";
     let usedTools: string[] = [];
 
-    try {
-      const result = await runAgentTurn({
-        history,
-        context: {
-          userId,
-          houseId: conversation.houseId,
-        },
-      });
-      assistantText = result.assistantText;
-      usedTools = result.usedTools;
-    } catch (error) {
-      assistantText =
-        error instanceof Error
-          ? `Je n'ai pas pu traiter la demande: ${error.message}`
-          : "Je n'ai pas pu traiter la demande pour une raison inconnue.";
+    if (incoming.message && !isInScopeMessage(incoming.message)) {
+      assistantText = OUT_OF_SCOPE_REPLY;
+    } else {
+      try {
+        const result = await runAgentTurn({
+          history,
+          context: {
+            userId,
+            houseId: conversation.houseId,
+          },
+        });
+        assistantText = result.assistantText;
+        usedTools = result.usedTools;
+      } catch (error) {
+        assistantText =
+          error instanceof Error
+            ? `Je n'ai pas pu traiter la demande: ${error.message}`
+            : "Je n'ai pas pu traiter la demande pour une raison inconnue.";
+      }
     }
 
     const assistantMessage = await messageDelegate.create({
