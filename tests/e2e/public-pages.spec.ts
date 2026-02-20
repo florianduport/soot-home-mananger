@@ -27,4 +27,10 @@ test.describe("Public pages", () => {
       })
     ).toBeVisible();
   });
+
+  test("house settings redirects unauthenticated users", async ({ page }) => {
+    await page.goto("/app/house");
+
+    await expect(page).toHaveURL(/\\/login/i);
+  });
 });

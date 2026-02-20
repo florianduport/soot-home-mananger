@@ -10,6 +10,7 @@ import {
   Hammer,
   Handshake,
   Home,
+  House,
   Landmark,
   LogOut,
   Moon,
@@ -39,7 +40,10 @@ const primaryNav = [
   { href: "/app/marketplace", label: "Marketplace", icon: Store },
 ];
 
-const secondaryNav = [{ href: "/app/settings", label: "Réglages", icon: Settings }];
+const secondaryNav = [
+  { href: "/app/house", label: "Maison", icon: House },
+  { href: "/app/settings", label: "Réglages", icon: Settings },
+];
 const userMenuTriggerClassName =
   "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-sm transition-colors hover:bg-sidebar-primary/90";
 const userMenuItemClassName =

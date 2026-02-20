@@ -192,7 +192,7 @@ export function CalendarView({
                       const href =
                         task.href ??
                         (task.kind === "important_date"
-                          ? "/app/settings"
+                          ? "/app/house"
                           : `/app/tasks/${task.parentId ?? task.id}`);
                       const className = `block truncate rounded-md border px-2 py-1.5 text-xs font-medium transition hover:opacity-80 sm:text-sm ${
                         task.kind === "important_date"

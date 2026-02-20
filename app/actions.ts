@@ -1885,6 +1885,7 @@ function revalidateApp() {
   revalidatePath("/app/calendar");
   revalidatePath("/app/budgets");
   revalidatePath("/app/shopping-lists");
+  revalidatePath("/app/house");
   revalidatePath("/app/settings");
   revalidatePath("/app/notifications");
 }
