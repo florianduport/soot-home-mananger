@@ -504,10 +504,10 @@ export function AgentChat() {
         type="button"
         onClick={() => setIsOpen((previous) => !previous)}
         className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground shadow-lg transition-colors hover:bg-sidebar-primary/90 sm:right-6 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        title="Ouvrir l'agent IA"
+        title="Ouvrir Soot"
       >
         <MessageCircle className="h-5 w-5" />
-        <span className="sr-only">Ouvrir l&apos;agent IA</span>
+        <span className="sr-only">Ouvrir Soot</span>
       </button>
 
       {isOpen ? (
@@ -525,7 +525,7 @@ export function AgentChat() {
                 <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
                   <div>
                     <p className="text-sm font-semibold">Conversations</p>
-                    <p className="text-xs text-muted-foreground">Historique agent</p>
+                    <p className="text-xs text-muted-foreground">Historique Soot</p>
                   </div>
                   <Button
                     type="button"
@@ -629,7 +629,7 @@ export function AgentChat() {
                     <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
                       <div>
                         <p className="text-sm font-semibold">Conversations</p>
-                        <p className="text-xs text-muted-foreground">Historique agent</p>
+                        <p className="text-xs text-muted-foreground">Historique Soot</p>
                       </div>
                       <Button
                         type="button"
@@ -744,10 +744,10 @@ export function AgentChat() {
               <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">
-                    {activeConversation?.title || "Agent Soot"}
+                    {activeConversation?.title || "Soot"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Posez une question ou déléguez une action.
+                    Soot vous aide à organiser la maison, avec un ton chaleureux et concret.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -808,7 +808,7 @@ export function AgentChat() {
                           >
                             {!fromUser ? (
                               <p className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Bot className="h-3 w-3" /> Agent
+                                <Bot className="h-3 w-3" /> Soot
                               </p>
                             ) : null}
                             {message.isPending ? (
@@ -882,9 +882,21 @@ export function AgentChat() {
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    <p className="text-sm text-muted-foreground">
-                      Commencez une conversation avec l&apos;agent.
-                    </p>
+                    <div className="space-y-3 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        Commencez une conversation avec Soot.
+                      </p>
+                      <div className="rounded-2xl border border-dashed border-border/70 bg-card/60 p-4 text-left text-xs text-muted-foreground">
+                        <p className="font-semibold text-foreground">Guide de ton Soot</p>
+                        <p className="mt-1">
+                          Style: chaleureux, clair, concret, orienté action.
+                        </p>
+                        <p className="mt-2">
+                          Exemples: &quot;Salut Soot, planifie mon ménage&quot; ou
+                          &quot;Soot, ajoute une tâche&quot;.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
