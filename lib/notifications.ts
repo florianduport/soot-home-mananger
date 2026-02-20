@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { format, isSameDay, startOfDay, subDays } from "date-fns";
+import { addHours, format, isSameDay, startOfDay, subDays } from "date-fns";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl, sendEmail } from "@/lib/email";
 
@@ -12,9 +12,26 @@ type NotificationOptions = {
   linkUrl?: string | null;
   dedupeKey?: string | null;
   sendEmail?: boolean;
+  respectQuietHours?: boolean;
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+  quietHoursEnabled: false,
+  quietHoursStart: "22:00",
+  quietHoursEnd: "07:00",
+  escalationEnabled: false,
+  escalationDelayHours: 24,
+  escalationTarget: "OWNER" as const,
 };
 
 function isNotificationUnavailableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
+function isNotificationPreferenceUnavailableError(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     (error.code === "P2021" || error.code === "P2022")
@@ -29,6 +46,60 @@ function resolveNotificationUrl(linkUrl?: string | null) {
   } catch {
     return baseUrl;
   }
+}
+
+function parseTimeToMinutes(value: string | null | undefined) {
+  if (!value) return null;
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours * 60 + minutes;
+}
+
+function isWithinQuietHours(date: Date, start: string, end: string) {
+  const startMinutes = parseTimeToMinutes(start);
+  const endMinutes = parseTimeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return false;
+
+  const currentMinutes = date.getHours() * 60 + date.getMinutes();
+  if (startMinutes === endMinutes) return true;
+  if (startMinutes < endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+}
+
+export async function getNotificationPreferences(userId: string, houseId: string) {
+  try {
+    const preferences = await prisma.notificationPreference.findUnique({
+      where: { userId_houseId: { userId, houseId } },
+      select: {
+        quietHoursEnabled: true,
+        quietHoursStart: true,
+        quietHoursEnd: true,
+        escalationEnabled: true,
+        escalationDelayHours: true,
+        escalationTarget: true,
+      },
+    });
+
+    return preferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
+  } catch (error) {
+    if (isNotificationPreferenceUnavailableError(error)) {
+      return DEFAULT_NOTIFICATION_PREFERENCES;
+    }
+    throw error;
+  }
+}
+
+function resolveEscalationEnabled(
+  taskOverride: "DEFAULT" | "ENABLED" | "DISABLED",
+  preferenceEnabled: boolean
+) {
+  if (taskOverride === "ENABLED") return true;
+  if (taskOverride === "DISABLED") return false;
+  return preferenceEnabled;
 }
 
 async function maybeSendNotificationEmail(
@@ -89,6 +160,13 @@ async function maybeSendNotificationEmail(
 
 export async function createNotification(options: NotificationOptions) {
   try {
+    const preferences = await getNotificationPreferences(options.userId, options.houseId);
+    const respectQuietHours = options.respectQuietHours ?? true;
+    const isQuietHours =
+      respectQuietHours &&
+      preferences.quietHoursEnabled &&
+      isWithinQuietHours(new Date(), preferences.quietHoursStart, preferences.quietHoursEnd);
+
     if (options.dedupeKey) {
       const existing = await prisma.notification.findUnique({
         where: { dedupeKey: options.dedupeKey },
@@ -110,7 +188,7 @@ export async function createNotification(options: NotificationOptions) {
       },
     });
 
-    if (options.sendEmail) {
+    if (options.sendEmail && !isQuietHours) {
       await maybeSendNotificationEmail(
         notification.id,
         options.userId,
@@ -135,6 +213,7 @@ export async function notifyTaskAssigned(options: {
   taskTitle: string;
   assigneeId: string;
   actorId: string;
+  respectQuietHours?: boolean;
 }) {
   if (options.assigneeId === options.actorId) return;
   await createNotification({
@@ -146,6 +225,7 @@ export async function notifyTaskAssigned(options: {
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-assigned:${options.taskId}:${options.assigneeId}`,
     sendEmail: true,
+    respectQuietHours: options.respectQuietHours,
   });
 }
 
@@ -256,6 +336,7 @@ export async function ensureTaskReminders(houseId: string) {
         title: true,
         dueDate: true,
         reminderOffsetDays: true,
+        ignoreQuietHours: true,
         assigneeId: true,
         createdById: true,
       },
@@ -284,9 +365,133 @@ export async function ensureTaskReminders(houseId: string) {
           linkUrl: `/app/tasks/${task.id}`,
           dedupeKey,
           sendEmail: true,
+          respectQuietHours: !task.ignoreQuietHours,
         });
       })
     );
+  } catch (error) {
+    if (isNotificationUnavailableError(error)) {
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function ensureTaskEscalations(houseId: string) {
+  try {
+    const pendingAssignments = await prisma.notification.findMany({
+      where: { houseId, type: "TASK_ASSIGNED", readAt: null },
+      select: {
+        id: true,
+        userId: true,
+        linkUrl: true,
+        dedupeKey: true,
+        createdAt: true,
+      },
+    });
+
+    if (!pendingAssignments.length) return;
+
+    const taskIds = pendingAssignments
+      .map((notification) => {
+        if (notification.dedupeKey?.startsWith("task-assigned:")) {
+          const [, taskId] = notification.dedupeKey.split(":");
+          if (taskId) return taskId;
+        }
+        const match = /\/app\/tasks\/([^/]+)$/.exec(notification.linkUrl ?? "");
+        return match?.[1] ?? null;
+      })
+      .filter(Boolean) as string[];
+
+    if (!taskIds.length) return;
+
+    const [tasks, owners] = await Promise.all([
+      prisma.task.findMany({
+        where: { id: { in: taskIds } },
+        select: {
+          id: true,
+          title: true,
+          houseId: true,
+          status: true,
+          createdById: true,
+          assigneeId: true,
+          ignoreQuietHours: true,
+          escalationOverride: true,
+          escalationDelayHours: true,
+        },
+      }),
+      prisma.houseMember.findMany({
+        where: { houseId, role: "OWNER" },
+        select: { userId: true },
+      }),
+    ]);
+
+    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const ownerIds = owners.map((owner) => owner.userId);
+    const preferencesCache = new Map<string, Awaited<ReturnType<typeof getNotificationPreferences>>>();
+    const now = new Date();
+
+    for (const notification of pendingAssignments) {
+      const taskId =
+        notification.dedupeKey?.startsWith("task-assigned:")
+          ? notification.dedupeKey.split(":")[1]
+          : /\/app\/tasks\/([^/]+)$/.exec(notification.linkUrl ?? "")?.[1];
+      if (!taskId) continue;
+      const task = taskMap.get(taskId);
+      if (!task || task.status === "DONE") continue;
+      if (!task.assigneeId || task.assigneeId !== notification.userId) continue;
+
+      const assigneeId = task.assigneeId;
+      const preferences =
+        preferencesCache.get(assigneeId) ??
+        (await getNotificationPreferences(assigneeId, houseId));
+      preferencesCache.set(assigneeId, preferences);
+
+      const escalationEnabled = resolveEscalationEnabled(
+        task.escalationOverride,
+        preferences.escalationEnabled
+      );
+      if (!escalationEnabled) continue;
+
+      const delayHours = task.escalationDelayHours ?? preferences.escalationDelayHours;
+      if (!delayHours || delayHours <= 0) continue;
+      const dueTime = addHours(notification.createdAt, delayHours);
+      if (dueTime > now) continue;
+
+      const recipientSet = new Set<string>();
+      if (
+        preferences.escalationTarget === "OWNER" ||
+        preferences.escalationTarget === "OWNER_AND_CREATOR"
+      ) {
+        ownerIds.forEach((ownerId) => recipientSet.add(ownerId));
+      }
+      if (
+        preferences.escalationTarget === "CREATOR" ||
+        preferences.escalationTarget === "OWNER_AND_CREATOR"
+      ) {
+        if (task.createdById) recipientSet.add(task.createdById);
+      }
+
+      recipientSet.delete(assigneeId);
+
+      if (!recipientSet.size) continue;
+
+      await Promise.all(
+        Array.from(recipientSet).map((recipientId) =>
+          createNotification({
+            userId: recipientId,
+            houseId,
+            type: "TASK_ASSIGNED",
+            title: `Escalade: ${task.title}`,
+            body: "La tâche n'a pas encore été prise en charge.",
+            linkUrl: `/app/tasks/${task.id}`,
+            dedupeKey: `task-escalation:${task.id}:${assigneeId}:${recipientId}`,
+            sendEmail: true,
+            respectQuietHours: !task.ignoreQuietHours,
+          })
+        )
+      );
+    }
   } catch (error) {
     if (isNotificationUnavailableError(error)) {
       return;

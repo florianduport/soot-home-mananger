@@ -14,7 +14,9 @@ import { LanguageSettings } from "@/components/settings/language-settings";
 import { HouseIconUpload } from "@/components/houses/house-icon-upload";
 import { SettingsEntityManager } from "@/components/settings/settings-entity-manager";
 import { SettingsImportantDatesManager } from "@/components/settings/settings-important-dates-manager";
+import { NotificationSettings } from "@/components/settings/notification-settings";
 import { Settings } from "lucide-react";
+import { getNotificationPreferences } from "@/lib/notifications";
 
 const statusLabels: Record<string, string> = {
   PENDING: "En attente",
@@ -45,6 +47,7 @@ export default async function SettingsPage() {
     await getHouseData(session.user.id);
   const houseIconUrl = membership.house.iconUrl;
   const canEditHouse = membership.role === "OWNER";
+  const notificationPreferences = await getNotificationPreferences(session.user.id, houseId);
 
   return (
     <>
@@ -79,6 +82,8 @@ export default async function SettingsPage() {
             />
           </CardContent>
         </Card>
+
+        <NotificationSettings houseId={houseId} preferences={notificationPreferences} />
 
         <Card>
           <CardHeader>

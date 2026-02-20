@@ -5,6 +5,7 @@ import { AvatarSelect } from "@/components/ui/avatar-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TaskNotificationFields } from "@/components/tasks/task-notification-fields";
 import { useMemo, useRef } from "react";
 
 export type TaskFormData = {
@@ -268,6 +269,7 @@ export function TaskForm({
           />
         </div>
       </div>
+      <TaskNotificationFields />
       <Button type="submit" variant="add" className="rounded-full">
         Créer la tâche
       </Button>

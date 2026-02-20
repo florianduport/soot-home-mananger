@@ -11,6 +11,7 @@ import { StatusToggle } from "@/components/tasks/status-toggle";
 import { AvatarSelect } from "@/components/ui/avatar-select";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { IllustrationPlaceholder } from "@/components/ui/illustration-placeholder";
+import { TaskNotificationFields } from "@/components/tasks/task-notification-fields";
 import { requireSession } from "@/lib/house";
 import { prisma } from "@/lib/db";
 import { resolveEquipmentImageUrl } from "@/lib/equipment-images";
@@ -515,6 +516,13 @@ export default async function TaskDetailPage({
                     />
                   </div>
                 </div>
+                <TaskNotificationFields
+                  values={{
+                    ignoreQuietHours: task.ignoreQuietHours,
+                    escalationOverride: task.escalationOverride,
+                    escalationDelayHours: task.escalationDelayHours,
+                  }}
+                />
                 <Button type="submit" className="w-full">
                   Enregistrer les modifications
                 </Button>
