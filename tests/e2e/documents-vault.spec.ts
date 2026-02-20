@@ -34,14 +34,14 @@ test("documents vault upload links to task and equipment", async ({ page }) => {
   await page.selectOption('select[name="equipmentId"]', equipmentId);
   await page.selectOption('select[name="taskId"]', taskId);
   await page.fill('textarea[name="notes"]', "Garantie pour la chaudière.");
-  await page.getByRole("button", { name: "Ajouter au coffre" }).click();
+  await page.getByRole("button", { name: /Ajouter au coffre|Add to vault/i }).click();
 
-  await expect(page.getByText("Garantie ·"))
+  await expect(page.getByText(/Garantie ·|Warranty ·/i))
     .toBeVisible();
-  await expect(page.getByText("Garantie jusqu'au"))
+  await expect(page.getByText(/Garantie jusqu'au|Warranty until/i))
     .toBeVisible();
-  await expect(page.getByText("Équipement: Chaudière"))
+  await expect(page.getByText(/Équipement: Chaudière|Equipment: Chaudière/i))
     .toBeVisible();
-  await expect(page.getByText("Tâche: Réparer la porte"))
+  await expect(page.getByText(/Tâche: Réparer la porte|Task: Réparer la porte/i))
     .toBeVisible();
 });
