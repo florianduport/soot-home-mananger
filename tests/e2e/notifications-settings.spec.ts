@@ -16,8 +16,7 @@ test("notification preferences and task overrides are available", async ({ page 
   await expect(page.locator('input[name="escalationDelayHours"]')).toBeVisible();
   await expect(page.locator('select[name="escalationTarget"]')).toBeVisible();
 
-  await page.goto("/app/tasks");
-  await page.locator("#create-task").setChecked(true, { force: true });
+  await page.goto("/app/tasks?create=1");
   await expect(page.locator('input[name="ignoreQuietHours"]')).toBeVisible();
   await expect(page.locator('select[name="escalationOverride"]')).toBeVisible();
 });
