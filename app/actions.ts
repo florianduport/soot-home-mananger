@@ -2154,32 +2154,6 @@ export async function updateUserProfile(formData: FormData) {
   revalidateApp();
 }
 
-export async function markAllNotificationsRead() {
-  const userId = await requireUser();
-  await prisma.notification.updateMany({
-    where: { userId, readAt: null },
-    data: { readAt: new Date() },
-  });
-  revalidatePath("/app/notifications");
-}
-
-export async function markNotificationRead(formData: FormData) {
-  const userId = await requireUser();
-  const parsed = z
-    .object({ notificationId: cuidSchema })
-    .parse({ notificationId: formData.get("notificationId") });
-
-  await prisma.notification.updateMany({
-    where: {
-      id: parsed.notificationId,
-      userId,
-      readAt: null,
-    },
-    data: { readAt: new Date() },
-  });
-  revalidatePath("/app/notifications");
-}
-
 export async function uploadUserAvatar(formData: FormData) {
   const userId = await requireUser();
   const avatarFile = formData.get("avatarFile");
