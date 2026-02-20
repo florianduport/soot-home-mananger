@@ -67,6 +67,7 @@ enum BudgetDocumentType {
   RECEIPT
   INVOICE
   QUOTE
+  WARRANTY
   OTHER
 }
 
@@ -268,6 +269,7 @@ model Project {
   house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
   tasks Task[]
   taskSuggestions TaskSuggestion[]
+  documents BudgetDocument[] @relation("EquipmentDocuments")
 }
 
 model Equipment {
@@ -373,25 +375,33 @@ model BudgetDocument {
   houseId            String
   uploadedById       String?
   vendorId           String?
+  taskId             String?
+  equipmentId        String?
   name               String
   mimeType           String
   sizeBytes          Int
   path               String
   documentType       BudgetDocumentType @default(OTHER)
   issuedOn           DateTime?
+  warrantyEndsOn     DateTime?
   supplier           String?
   extractedLabel     String?
   extractedAmountCents Int?
+  notes              String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
   house      House         @relation(fields: [houseId], references: [id], onDelete: Cascade)
   uploadedBy User?         @relation("BudgetDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
   vendor     Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  task       Task?         @relation("TaskDocuments", fields: [taskId], references: [id], onDelete: SetNull)
+  equipment  Equipment?    @relation("EquipmentDocuments", fields: [equipmentId], references: [id], onDelete: SetNull)
   entries    BudgetEntry[]
 
   @@index([houseId, createdAt])
   @@index([vendorId])
+  @@index([taskId])
+  @@index([equipmentId])
 }
 
 model BudgetEntry {
@@ -462,6 +472,7 @@ model Task {
   children   Task[]     @relation("TaskParent")
 
   comments   TaskComment[]
+  documents  BudgetDocument[] @relation("TaskDocuments")
 }
 
 model Vendor {

@@ -45,6 +45,14 @@ const recurrenceLabels: Record<"DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY", string
   YEARLY: "an",
 };
 
+const documentTypeLabels: Record<string, string> = {
+  INVOICE: "Facture",
+  QUOTE: "Devis",
+  RECEIPT: "Reçu",
+  WARRANTY: "Garantie",
+  OTHER: "Document",
+};
+
 function formatRecurrence(
   unit: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | null | undefined,
   interval: number | null | undefined
@@ -99,6 +107,18 @@ export default async function TaskDetailPage({
       animal: true,
       person: true,
       vendor: true,
+      documents: {
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        select: {
+          id: true,
+          name: true,
+          documentType: true,
+          issuedOn: true,
+          warrantyEndsOn: true,
+          path: true,
+        },
+      },
       parent: true,
       assignee: true,
       comments: {
@@ -523,6 +543,43 @@ export default async function TaskDetailPage({
           </Card>
         ) : null}
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Documents liés</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {task.documents.length ? (
+            task.documents.map((doc) => (
+              <div
+                key={doc.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+              >
+                <div>
+                  <p className="font-medium">
+                    {documentTypeLabels[doc.documentType] ?? "Document"} · {doc.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {doc.issuedOn ? `Émis le ${formatDate(doc.issuedOn)}` : "Date inconnue"}
+                    {doc.warrantyEndsOn
+                      ? ` · Garantie jusqu'au ${formatDate(doc.warrantyEndsOn)}`
+                      : ""}
+                  </p>
+                </div>
+                {doc.path ? (
+                  <Link href={doc.path} className="text-xs text-muted-foreground hover:underline">
+                    Voir le fichier
+                  </Link>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Aucun document lié pour le moment.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
