@@ -74,6 +74,7 @@ export function LanguageSwitcher({
         <div className="relative">
           <select
             id={id}
+            data-testid="language-switcher-select"
             value={language}
             onChange={(event) => setLanguage(event.target.value as AppLanguage)}
             className={cn(
