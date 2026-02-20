@@ -22,6 +22,7 @@ export type TaskListItem = {
   animalImageUrl?: string | null;
   person?: string | null;
   personImageUrl?: string | null;
+  vendor?: string | null;
   recurring?: boolean;
   assignee?: string | null;
   assigneeId?: string | null;
@@ -123,6 +124,7 @@ export function TaskList({
               task.equipment ||
               task.animal ||
               task.person ||
+              task.vendor ||
               task.assignee) && (
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 {task.zone ? <span>Zone: {task.zone}</span> : null}
@@ -171,6 +173,7 @@ export function TaskList({
                     <span>{task.person}</span>
                   </span>
                 ) : null}
+                {task.vendor ? <span>Prestataire: {task.vendor}</span> : null}
                 {task.assignee ? (
                   <span className="inline-flex items-center gap-1.5">
                     <span>Assignée à:</span>

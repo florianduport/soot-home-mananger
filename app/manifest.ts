@@ -1,16 +1,22 @@
 import type { MetadataRoute } from "next";
+import { getServerLanguage } from "@/lib/i18n/server";
+import { translateText } from "@/lib/i18n/translate";
 
-export default function manifest(): MetadataRoute.Manifest {
+const APP_DESCRIPTION = "Gestion des tâches et de la maison";
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const language = await getServerLanguage();
+
   return {
     name: "Soot",
     short_name: "Soot",
-    description: "Gestion des tâches et de la maison",
+    description: translateText(APP_DESCRIPTION, language),
     start_url: "/",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#111827",
-    lang: "fr",
+    lang: language,
     icons: [
       {
         src: "/pwa-192x192.png",

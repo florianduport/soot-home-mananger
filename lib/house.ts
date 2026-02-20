@@ -282,12 +282,24 @@ export async function getHouseData(userId: string) {
     }
   }
 
-  const [zones, categories, animals, people, equipments, projects, members, invites, tasks, suggestions] =
-    await Promise.all([
+  const [
+    zones,
+    categories,
+    animals,
+    people,
+    vendors,
+    equipments,
+    projects,
+    members,
+    invites,
+    tasks,
+    suggestions,
+  ] = await Promise.all([
     prisma.zone.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     prisma.category.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     loadAnimalsWithAvatarFallback(houseId),
     loadPeopleWithAvatarFallback(houseId),
+    prisma.vendor.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     prisma.equipment.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     prisma.project.findMany({ where: { houseId }, orderBy: { createdAt: "desc" } }),
     prisma.houseMember.findMany({
@@ -309,6 +321,7 @@ export async function getHouseData(userId: string) {
         project: true,
         animal: true,
         person: true,
+        vendor: true,
         parent: true,
         assignee: true,
       },
@@ -332,6 +345,7 @@ export async function getHouseData(userId: string) {
     categories,
     animals,
     people,
+    vendors,
     equipments,
     projects,
     shoppingLists,

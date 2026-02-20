@@ -36,10 +36,12 @@ export function BudgetActionsMenu({
   houseId,
   selectedMonth,
   defaultEntryDate,
+  vendors,
 }: {
   houseId: string;
   selectedMonth: string;
   defaultEntryDate: string;
+  vendors: { id: string; name: string; company?: string | null }[];
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [activeForm, setActiveForm] = useState<BudgetFormType | null>(null);
@@ -258,6 +260,25 @@ export function BudgetActionsMenu({
                   accept="application/pdf,image/*"
                   required
                 />
+                <div className="grid gap-2">
+                  <label className="text-sm text-muted-foreground" htmlFor="vendorId">
+                    Prestataire (optionnel)
+                  </label>
+                  <select
+                    id="vendorId"
+                    name="vendorId"
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    defaultValue=""
+                  >
+                    <option value="">—</option>
+                    {vendors.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id}>
+                        {vendor.name}
+                        {vendor.company ? ` · ${vendor.company}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Input name="fallbackMonth" type="month" defaultValue={selectedMonth} required />
                   <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">

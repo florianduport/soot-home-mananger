@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SootMascot } from "@/components/mascot/soot-mascot";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 
 type AmbientSpeck = {
   id: number;
@@ -168,13 +169,22 @@ export function SootLanding() {
               Roadmap
             </a>
           </nav>
-          <Button
-            asChild
-            variant="outline"
-            className="shrink-0 rounded-full border-[#849f8a] bg-[#fbf7ee] text-[#1a271f] hover:bg-[#f2e9d9]"
-          >
-            <Link href="/login">Connexion</Link>
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <LanguageSwitcher
+              compact
+              showLabel={false}
+              showAutoDetected
+              className="rounded-full border border-[#d2bea0] bg-[#fbf7ee] px-2.5 py-1.5"
+              selectClassName="h-8 border-0 bg-transparent px-1.5 text-xs shadow-none"
+            />
+            <Button
+              asChild
+              variant="outline"
+              className="rounded-full border-[#849f8a] bg-[#fbf7ee] text-[#1a271f] hover:bg-[#f2e9d9]"
+            >
+              <Link href="/login">Connexion</Link>
+            </Button>
+          </div>
         </header>
 
         <section

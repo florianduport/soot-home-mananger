@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { BudgetActionsMenu } from "@/components/budgets/budget-actions-menu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { prisma } from "@/lib/db";
 
 type BudgetSearchParams = { [key: string]: string | string[] | undefined };
 type Locale = "fr" | "en" | "es";
@@ -313,6 +314,10 @@ export default async function BudgetsPage({
   const membership = await requireHouse(session.user.id);
   const houseId = membership.houseId;
   const resolvedSearchParams = await resolveSearchParams(searchParams);
+  const vendors = await prisma.vendor.findMany({
+    where: { houseId },
+    orderBy: { name: "asc" },
+  });
 
   const selectedMonth =
     parseMonthKey((resolvedSearchParams.month ?? "").toString()) ||
@@ -540,6 +545,7 @@ export default async function BudgetsPage({
             houseId={houseId}
             selectedMonth={selectedMonth}
             defaultEntryDate={defaultEntryDate}
+            vendors={vendors}
           />
         </header>
         <div className="flex w-full items-center justify-center gap-2">

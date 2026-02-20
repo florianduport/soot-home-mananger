@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CheckSquare2,
   Hammer,
+  Handshake,
   Home,
   Landmark,
   LogOut,
@@ -17,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShoppingCart,
+  Store,
   Settings,
   Sun,
   UserRound,
@@ -32,7 +34,9 @@ const primaryNav = [
   { href: "/app/budgets", label: "Budgets", icon: Landmark },
   { href: "/app/shopping-lists", label: "Listes d'achats", icon: ShoppingCart },
   { href: "/app/projects", label: "Projets", icon: Hammer },
+  { href: "/app/vendors", label: "Prestataires", icon: Handshake },
   { href: "/app/equipment", label: "Équipements", icon: Package },
+  { href: "/app/marketplace", label: "Marketplace", icon: Store },
 ];
 
 const secondaryNav = [{ href: "/app/settings", label: "Réglages", icon: Settings }];

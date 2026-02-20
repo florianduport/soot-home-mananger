@@ -37,6 +37,15 @@ enum InviteStatus {
   EXPIRED
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_COMMENTED
+  TASK_STATUS
+  TASK_REMINDER
+  PROJECT_CREATED
+  INVITE_ACCEPTED
+}
+
 enum AgentMessageRole {
   USER
   ASSISTANT
@@ -92,6 +101,7 @@ model User {
   createdBudgetEntries BudgetEntry[] @relation("BudgetEntryCreator")
   createdBudgetRecurringEntries BudgetRecurringEntry[] @relation("BudgetRecurringCreator")
   uploadedBudgetDocuments BudgetDocument[] @relation("BudgetDocumentUploader")
+  notifications  Notification[]
 }
 
 model Account {
@@ -158,8 +168,30 @@ model House {
   budgetEntries BudgetEntry[]
   budgetRecurringEntries BudgetRecurringEntry[]
   budgetDocuments BudgetDocument[]
+  vendors     Vendor[]
+  notifications Notification[]
 
   @@index([clientStatus])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  houseId     String
+  type        NotificationType
+  title       String
+  body        String?
+  linkUrl     String?
+  dedupeKey   String?          @unique
+  readAt      DateTime?
+  emailSentAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  house       House            @relation(fields: [houseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([houseId, createdAt])
 }
 
 model HouseMember {
@@ -340,6 +372,7 @@ model BudgetDocument {
   id                 String             @id @default(cuid())
   houseId            String
   uploadedById       String?
+  vendorId           String?
   name               String
   mimeType           String
   sizeBytes          Int
@@ -354,9 +387,11 @@ model BudgetDocument {
 
   house      House         @relation(fields: [houseId], references: [id], onDelete: Cascade)
   uploadedBy User?         @relation("BudgetDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  vendor     Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   entries    BudgetEntry[]
 
   @@index([houseId, createdAt])
+  @@index([vendorId])
 }
 
 model BudgetEntry {
@@ -408,6 +443,7 @@ model Task {
   equipmentId        String?
   animalId           String?
   personId           String?
+  vendorId           String?
   parentId           String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
@@ -421,10 +457,33 @@ model Task {
   equipment  Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   animal     Animal?    @relation(fields: [animalId], references: [id], onDelete: SetNull)
   person     Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
+  vendor     Vendor?    @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   parent     Task?      @relation("TaskParent", fields: [parentId], references: [id])
   children   Task[]     @relation("TaskParent")
 
   comments   TaskComment[]
+}
+
+model Vendor {
+  id        String   @id @default(cuid())
+  houseId   String
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  website   String?
+  address   String?
+  notes     String?
+  rating    Int?
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  house      House           @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+  documents  BudgetDocument[]
+
+  @@index([houseId, name])
 }
 
 model TaskSuggestion {
