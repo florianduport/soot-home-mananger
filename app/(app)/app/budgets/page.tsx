@@ -319,7 +319,6 @@ export default async function BudgetsPage({
   const { start, end } = monthRangeFromKey(selectedMonth);
   const previousMonth = shiftMonthKey(selectedMonth, -1);
   const nextMonth = shiftMonthKey(selectedMonth, 1);
-  const monthEndInclusive = new Date(end.getTime() - 1);
   const nowMonth = toMonthKey(new Date());
   const defaultEntryDate = dateInputLabel(start);
   const insightsMonths = 6;
