@@ -153,8 +153,9 @@ const COPY = {
   },
 } as const;
 
-function resolveLocaleFromHeaders(): Locale {
-  const acceptLanguage = headers().get("accept-language") ?? "";
+async function resolveLocaleFromHeaders(): Promise<Locale> {
+  const headersList = await headers();
+  const acceptLanguage = headersList.get("accept-language") ?? "";
   const candidates = acceptLanguage
     .split(",")
     .map((part) => part.trim().split(";")[0]?.toLowerCase())
@@ -274,7 +275,7 @@ export default async function BudgetsPage({
 }: {
   searchParams: BudgetSearchParams | Promise<BudgetSearchParams>;
 }) {
-  const locale = resolveLocaleFromHeaders();
+  const locale = await resolveLocaleFromHeaders();
   const localeTag = LOCALE_TAGS[locale];
   const t = COPY[locale];
 
