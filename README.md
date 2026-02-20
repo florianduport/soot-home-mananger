@@ -178,6 +178,7 @@ npx prisma generate
 Important:
 
 - Le module notifications utilise maintenant le modele `Notification`.
+- Les heures silencieuses et l'escalade utilisent le modele `NotificationPreference` + champs de tache (`allowDuringQuietHours`, `escalationDelayHours`, `escalationDisabled`, `assignedAt`).
 - Appliquer le schema avant de tester cette fonctionnalite.
 
 ## Documentation vivante

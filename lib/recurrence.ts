@@ -63,6 +63,9 @@ export async function ensureRecurringTasks(houseId: string) {
       equipmentId: true,
       animalId: true,
       personId: true,
+      allowDuringQuietHours: true,
+      escalationDelayHours: true,
+      escalationDisabled: true,
     },
   });
 
@@ -129,6 +132,10 @@ export async function ensureRecurringTasks(houseId: string) {
             equipmentId: template.equipmentId,
             animalId: template.animalId,
             personId: template.personId,
+            assignedAt: template.assigneeId ? new Date() : null,
+            allowDuringQuietHours: template.allowDuringQuietHours,
+            escalationDelayHours: template.escalationDelayHours,
+            escalationDisabled: template.escalationDisabled,
             parentId: template.id,
           },
         });

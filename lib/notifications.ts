@@ -1,20 +1,43 @@
 import { Prisma } from "@prisma/client";
-import { format, isSameDay, startOfDay, subDays } from "date-fns";
+import { differenceInMinutes, format, isSameDay, startOfDay, subDays } from "date-fns";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl, sendEmail } from "@/lib/email";
 
 type NotificationOptions = {
   userId: string;
   houseId: string;
-  type: "TASK_ASSIGNED" | "TASK_COMMENTED" | "TASK_STATUS" | "TASK_REMINDER" | "PROJECT_CREATED" | "INVITE_ACCEPTED";
+  type:
+    | "TASK_ASSIGNED"
+    | "TASK_COMMENTED"
+    | "TASK_STATUS"
+    | "TASK_REMINDER"
+    | "TASK_ESCALATION"
+    | "PROJECT_CREATED"
+    | "INVITE_ACCEPTED";
   title: string;
   body?: string | null;
   linkUrl?: string | null;
   dedupeKey?: string | null;
   sendEmail?: boolean;
+  allowDuringQuietHours?: boolean;
+};
+
+type NotificationPreferences = {
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  escalationEnabled: boolean;
+  escalationDelayHours: number;
 };
 
 function isNotificationUnavailableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
+function isNotificationPreferenceUnavailableError(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     (error.code === "P2021" || error.code === "P2022")
@@ -29,6 +52,78 @@ function resolveNotificationUrl(linkUrl?: string | null) {
   } catch {
     return baseUrl;
   }
+}
+
+function parseTimeMinutes(value: string) {
+  const [hoursRaw, minutesRaw] = value.split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function isQuietHoursActive(preferences: NotificationPreferences, now: Date) {
+  if (!preferences.quietHoursEnabled) return false;
+
+  const startMinutes = parseTimeMinutes(preferences.quietHoursStart);
+  const endMinutes = parseTimeMinutes(preferences.quietHoursEnd);
+  if (startMinutes === null || endMinutes === null) return false;
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  if (startMinutes === endMinutes) return false;
+  if (startMinutes < endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+}
+
+export async function getNotificationPreferences(userId: string, houseId: string) {
+  try {
+    const preferences = await prisma.notificationPreference.findUnique({
+      where: { userId_houseId: { userId, houseId } },
+      select: {
+        quietHoursEnabled: true,
+        quietHoursStart: true,
+        quietHoursEnd: true,
+        escalationEnabled: true,
+        escalationDelayHours: true,
+      },
+    });
+
+    return (
+      preferences ?? {
+        quietHoursEnabled: false,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "07:00",
+        escalationEnabled: true,
+        escalationDelayHours: 24,
+      }
+    );
+  } catch (error) {
+    if (isNotificationPreferenceUnavailableError(error)) {
+      return {
+        quietHoursEnabled: false,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "07:00",
+        escalationEnabled: true,
+        escalationDelayHours: 24,
+      };
+    }
+    throw error;
+  }
+}
+
+async function shouldSendNotificationEmail(options: {
+  userId: string;
+  houseId: string;
+  allowDuringQuietHours?: boolean;
+}) {
+  if (options.allowDuringQuietHours) return true;
+  const preferences = await getNotificationPreferences(options.userId, options.houseId);
+  if (!preferences.quietHoursEnabled) return true;
+  return !isQuietHoursActive(preferences, new Date());
 }
 
 async function maybeSendNotificationEmail(
@@ -111,13 +206,21 @@ export async function createNotification(options: NotificationOptions) {
     });
 
     if (options.sendEmail) {
-      await maybeSendNotificationEmail(
-        notification.id,
-        options.userId,
-        options.title,
-        options.body,
-        options.linkUrl
-      );
+      const canSend = await shouldSendNotificationEmail({
+        userId: options.userId,
+        houseId: options.houseId,
+        allowDuringQuietHours: options.allowDuringQuietHours,
+      });
+
+      if (canSend) {
+        await maybeSendNotificationEmail(
+          notification.id,
+          options.userId,
+          options.title,
+          options.body,
+          options.linkUrl
+        );
+      }
     }
 
     return notification;
@@ -135,6 +238,7 @@ export async function notifyTaskAssigned(options: {
   taskTitle: string;
   assigneeId: string;
   actorId: string;
+  allowDuringQuietHours?: boolean;
 }) {
   if (options.assigneeId === options.actorId) return;
   await createNotification({
@@ -146,6 +250,7 @@ export async function notifyTaskAssigned(options: {
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-assigned:${options.taskId}:${options.assigneeId}`,
     sendEmail: true,
+    allowDuringQuietHours: options.allowDuringQuietHours,
   });
 }
 
@@ -155,6 +260,7 @@ export async function notifyTaskCommented(options: {
   taskTitle: string;
   recipientId: string;
   actorId: string;
+  allowDuringQuietHours?: boolean;
 }) {
   if (options.recipientId === options.actorId) return;
   await createNotification({
@@ -166,6 +272,7 @@ export async function notifyTaskCommented(options: {
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-comment:${options.taskId}:${options.recipientId}:${Date.now()}`,
     sendEmail: true,
+    allowDuringQuietHours: options.allowDuringQuietHours,
   });
 }
 
@@ -176,6 +283,7 @@ export async function notifyTaskStatusChanged(options: {
   recipientId: string;
   actorId: string;
   status: "DONE" | "TODO" | "IN_PROGRESS";
+  allowDuringQuietHours?: boolean;
 }) {
   if (options.recipientId === options.actorId) return;
   const statusLabel = options.status === "DONE" ? "terminée" : "mise à jour";
@@ -188,6 +296,7 @@ export async function notifyTaskStatusChanged(options: {
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-status:${options.taskId}:${options.recipientId}:${options.status}`,
     sendEmail: true,
+    allowDuringQuietHours: options.allowDuringQuietHours,
   });
 }
 
@@ -258,6 +367,7 @@ export async function ensureTaskReminders(houseId: string) {
         reminderOffsetDays: true,
         assigneeId: true,
         createdById: true,
+        allowDuringQuietHours: true,
       },
     });
 
@@ -284,7 +394,86 @@ export async function ensureTaskReminders(houseId: string) {
           linkUrl: `/app/tasks/${task.id}`,
           dedupeKey,
           sendEmail: true,
+          allowDuringQuietHours: task.allowDuringQuietHours,
         });
+      })
+    );
+  } catch (error) {
+    if (isNotificationUnavailableError(error)) {
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function ensureTaskEscalations(houseId: string) {
+  const now = new Date();
+
+  try {
+    const [tasks, owners] = await Promise.all([
+      prisma.task.findMany({
+        where: {
+          houseId,
+          isTemplate: false,
+          status: { not: "DONE" },
+          assigneeId: { not: null },
+        },
+        select: {
+          id: true,
+          title: true,
+          createdById: true,
+          assigneeId: true,
+          assignedAt: true,
+          createdAt: true,
+          escalationDelayHours: true,
+          escalationDisabled: true,
+        },
+      }),
+      prisma.houseMember.findMany({
+        where: { houseId, role: "OWNER" },
+        select: { userId: true },
+      }),
+    ]);
+
+    if (!tasks.length || !owners.length) return;
+
+    const ownerIds = owners.map((owner) => owner.userId);
+
+    await Promise.all(
+      tasks.map(async (task) => {
+        if (!task.assigneeId) return;
+        if (task.escalationDisabled) return;
+
+        const preferences = await getNotificationPreferences(task.assigneeId, houseId);
+        if (!preferences.escalationEnabled) return;
+
+        const delayHours = task.escalationDelayHours ?? preferences.escalationDelayHours;
+        if (!Number.isFinite(delayHours) || delayHours <= 0) return;
+
+        const baseTime = task.assignedAt ?? task.createdAt;
+        const elapsedMinutes = differenceInMinutes(now, baseTime);
+        if (elapsedMinutes < delayHours * 60) return;
+
+        const cycle = Math.floor(elapsedMinutes / (delayHours * 60));
+        if (cycle < 1) return;
+
+        const recipients = ownerIds.filter((ownerId) => ownerId !== task.assigneeId);
+        if (!recipients.length) return;
+
+        await Promise.all(
+          recipients.map((recipientId) =>
+            createNotification({
+              userId: recipientId,
+              houseId,
+              type: "TASK_ESCALATION",
+              title: `Tâche en attente: ${task.title}`,
+              body: `Aucune prise en charge après ${delayHours} h.`,
+              linkUrl: `/app/tasks/${task.id}`,
+              dedupeKey: `task-escalation:${task.id}:${task.assigneeId}:${recipientId}:${cycle}`,
+              sendEmail: true,
+            })
+          )
+        );
       })
     );
   } catch (error) {

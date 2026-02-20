@@ -363,6 +363,45 @@ export default async function TaskDetailPage({
                     />
                   </div>
                 </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-sm font-medium">Notifications</p>
+                  <p className="text-xs text-muted-foreground">
+                    Ajuste les règles de silence et l&apos;escalade pour cette tâche.
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        name="allowDuringQuietHours"
+                        defaultChecked={task.allowDuringQuietHours}
+                        className="mt-0.5 h-4 w-4 cursor-pointer accent-foreground"
+                      />
+                      Autoriser les notifications pendant les heures silencieuses.
+                    </label>
+                    <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        name="escalationDisabled"
+                        defaultChecked={task.escalationDisabled}
+                        className="mt-0.5 h-4 w-4 cursor-pointer accent-foreground"
+                      />
+                      Désactiver l&apos;escalade pour cette tâche.
+                    </label>
+                    <div className="grid gap-2">
+                      <label className="text-sm text-muted-foreground">
+                        Délai d&apos;escalade (heures)
+                      </label>
+                      <Input
+                        type="number"
+                        name="escalationDelayHours"
+                        min={1}
+                        max={168}
+                        defaultValue={task.escalationDelayHours ?? ""}
+                        placeholder="24"
+                      />
+                    </div>
+                  </div>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <label className="text-sm text-muted-foreground">Récurrence</label>
