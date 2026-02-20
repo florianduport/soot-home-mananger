@@ -435,7 +435,7 @@ export default async function BudgetsPage({
     selectedMonth > nowMonth
   ).sort((a, b) => {
     if (a.occurredOn.getTime() === b.occurredOn.getTime()) {
-      return a.label.localeCompare(b.label, "fr");
+      return a.label.localeCompare(b.label, localeTag);
     }
     return a.occurredOn.getTime() - b.occurredOn.getTime();
   });
