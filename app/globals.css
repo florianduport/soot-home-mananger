@@ -255,6 +255,22 @@
     z-index: 0;
   }
 
+  .app-theme-shell > .app-theme-ambient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .soot-app-orb {
+    position: absolute;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(38, 36, 34, 0.26) 0%, transparent 68%);
+    filter: blur(0.2px);
+    transform: translate3d(0, 0, 0);
+    animation: soot-app-drift var(--soot-drift-duration, 28s) ease-in-out infinite;
+  }
+
   .app-theme-shell > * {
     position: relative;
     z-index: 1;
@@ -435,6 +451,24 @@
   }
   75% {
     transform: rotate(3deg);
+  }
+}
+
+@keyframes soot-app-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.98);
+  }
+  50% {
+    transform: translate3d(var(--soot-drift, 18px), -14px, 0) scale(1.02);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soot-app-orb {
+    animation: none;
   }
 }
 

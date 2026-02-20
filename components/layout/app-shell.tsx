@@ -9,6 +9,16 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { AgentChat } from "@/components/agent/agent-chat";
 import { useTheme } from "@/hooks/use-theme";
 
+const sootAmbientOrbs = [
+  { id: "orb-1", top: "6%", left: "8%", size: 90, drift: 24, duration: 26, delay: -6, opacity: 0.2 },
+  { id: "orb-2", top: "18%", left: "72%", size: 120, drift: -18, duration: 30, delay: -12, opacity: 0.16 },
+  { id: "orb-3", top: "42%", left: "16%", size: 70, drift: 20, duration: 22, delay: -4, opacity: 0.18 },
+  { id: "orb-4", top: "58%", left: "78%", size: 96, drift: -16, duration: 28, delay: -8, opacity: 0.14 },
+  { id: "orb-5", top: "72%", left: "36%", size: 140, drift: 22, duration: 34, delay: -14, opacity: 0.15 },
+  { id: "orb-6", top: "82%", left: "8%", size: 64, drift: -14, duration: 20, delay: -2, opacity: 0.2 },
+  { id: "orb-7", top: "12%", left: "44%", size: 110, drift: 18, duration: 32, delay: -10, opacity: 0.14 },
+];
+
 export function AppShell({
   houseName,
   houseIconUrl,
@@ -115,6 +125,26 @@ export function AppShell({
       className={`app-theme-shell min-h-dvh ${hasCustomBackground ? "app-theme-shell--image" : ""}`}
       style={shellStyle}
     >
+      <div className="app-theme-ambient" aria-hidden="true">
+        {sootAmbientOrbs.map((orb) => (
+          <span
+            key={orb.id}
+            className="soot-app-orb"
+            style={
+              {
+                top: orb.top,
+                left: orb.left,
+                width: `${orb.size}px`,
+                height: `${orb.size}px`,
+                opacity: orb.opacity,
+                animationDuration: `${orb.duration}s`,
+                animationDelay: `${orb.delay}s`,
+                "--soot-drift": `${orb.drift}px`,
+              } as CSSProperties
+            }
+          />
+        ))}
+      </div>
       <div className="flex min-h-dvh">
         <Sidebar
           houseName={houseName}
