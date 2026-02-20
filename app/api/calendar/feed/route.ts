@@ -3,7 +3,10 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/email";
-import { buildImportantDateOccurrences } from "@/lib/important-dates";
+import {
+  buildImportantDateOccurrences,
+  type ImportantDateRecord,
+} from "@/lib/important-dates";
 import { getServerLanguage } from "@/lib/i18n/server";
 import { translateText } from "@/lib/i18n/translate";
 import {
@@ -38,14 +41,7 @@ function buildCalendarIcs({
     dueDate: Date;
     updatedAt: Date;
   }>;
-  importantDates: Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    date: Date;
-    type: string;
-    isRecurringYearly: boolean;
-  }>;
+  importantDates: ImportantDateRecord[];
 }) {
   const lines: string[] = [
     "BEGIN:VCALENDAR",
@@ -136,7 +132,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: t("Client désactivé.") }, { status: 403 });
     }
 
-    const tasks = await prisma.task.findMany({
+    const tasksRaw = await prisma.task.findMany({
       where: {
         houseId: membership.houseId,
         isTemplate: false,
@@ -152,15 +148,14 @@ export async function GET(request: Request) {
       },
       orderBy: [{ dueDate: "asc" }, { title: "asc" }],
     });
+    const tasks = tasksRaw
+      .filter((task) => task.dueDate !== null)
+      .map((task) => ({
+        ...task,
+        dueDate: task.dueDate as Date,
+      }));
 
-    let importantDates: Array<{
-      id: string;
-      title: string;
-      description: string | null;
-      date: Date;
-      type: string;
-      isRecurringYearly: boolean;
-    }> = [];
+    let importantDates: ImportantDateRecord[] = [];
 
     try {
       importantDates = await prisma.importantDate.findMany({
