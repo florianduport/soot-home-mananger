@@ -14,6 +14,7 @@ import { LanguageSettings } from "@/components/settings/language-settings";
 import { HouseIconUpload } from "@/components/houses/house-icon-upload";
 import { SettingsEntityManager } from "@/components/settings/settings-entity-manager";
 import { SettingsImportantDatesManager } from "@/components/settings/settings-important-dates-manager";
+import { NotificationSettings } from "@/components/settings/notification-settings";
 import { Settings } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
@@ -41,10 +42,24 @@ export default async function SettingsPage() {
     members,
     invites,
     importantDates,
+    notificationSettings: notificationSettingsRaw,
   } =
     await getHouseData(session.user.id);
   const houseIconUrl = membership.house.iconUrl;
   const canEditHouse = membership.role === "OWNER";
+  const notificationSettings = notificationSettingsRaw
+    ? {
+        quietHoursEnabled: notificationSettingsRaw.quietHoursEnabled,
+        quietHoursStartMinutes: notificationSettingsRaw.quietHoursStartMinutes,
+        quietHoursEndMinutes: notificationSettingsRaw.quietHoursEndMinutes,
+        scheduleEnabled: notificationSettingsRaw.scheduleEnabled,
+        scheduleDays: notificationSettingsRaw.scheduleDays,
+        scheduleStartMinutes: notificationSettingsRaw.scheduleStartMinutes,
+        scheduleEndMinutes: notificationSettingsRaw.scheduleEndMinutes,
+        escalationEnabled: notificationSettingsRaw.escalationEnabled,
+        escalationDelayHours: notificationSettingsRaw.escalationDelayHours,
+      }
+    : null;
 
   return (
     <>
@@ -79,6 +94,8 @@ export default async function SettingsPage() {
             />
           </CardContent>
         </Card>
+
+        <NotificationSettings settings={notificationSettings} />
 
         <Card>
           <CardHeader>

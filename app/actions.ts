@@ -27,6 +27,16 @@ import {
   enqueueTaskIllustration,
 } from "@/lib/illustrations";
 import {
+  notifyTaskAssigned,
+  notifyTaskCommented,
+  notifyTaskStatusChanged,
+} from "@/lib/notifications";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  parseTimeToMinutes,
+  type WeekdayValue,
+} from "@/lib/notification-settings";
+import {
   clearProjectImageGenerating,
   removeStoredProjectImageVariants,
 } from "@/lib/project-images";
@@ -74,6 +84,7 @@ const importantDateTypeSchema = z.enum([
   "EVENT",
   "OTHER",
 ]);
+const weekdaySchema = z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]);
 const importantDateTitleSchema = z
   .string()
   .trim()
@@ -225,6 +236,16 @@ function parseOnboardingPeople(value: string, maxItems = 6) {
       };
     })
     .filter((person) => person.name.length > 0);
+}
+
+function resolveMinutesOrFallback(
+  rawValue: FormDataEntryValue | null,
+  fallback: number
+) {
+  const parsed = parseTimeToMinutes(
+    typeof rawValue === "string" ? rawValue : null
+  );
+  return parsed ?? fallback;
 }
 
 function parseHouseOnboarding(formData: FormData): ParsedHouseOnboarding {
@@ -3910,6 +3931,79 @@ export async function revokeHouseInvite(formData: FormData) {
   revalidateApp();
 }
 
+export async function updateNotificationSettings(formData: FormData) {
+  const userId = await requireUser();
+
+  const quietHoursEnabled = formData.get("quietHoursEnabled") === "on";
+  const scheduleEnabled = formData.get("scheduleEnabled") === "on";
+  const escalationEnabled = formData.get("escalationEnabled") === "on";
+
+  const quietHoursStartMinutes = resolveMinutesOrFallback(
+    formData.get("quietHoursStart"),
+    DEFAULT_NOTIFICATION_SETTINGS.quietHoursStartMinutes
+  );
+  const quietHoursEndMinutes = resolveMinutesOrFallback(
+    formData.get("quietHoursEnd"),
+    DEFAULT_NOTIFICATION_SETTINGS.quietHoursEndMinutes
+  );
+  const scheduleStartMinutes = resolveMinutesOrFallback(
+    formData.get("scheduleStart"),
+    DEFAULT_NOTIFICATION_SETTINGS.scheduleStartMinutes
+  );
+  const scheduleEndMinutes = resolveMinutesOrFallback(
+    formData.get("scheduleEnd"),
+    DEFAULT_NOTIFICATION_SETTINGS.scheduleEndMinutes
+  );
+
+  const scheduleDaysRaw = formData
+    .getAll("scheduleDays")
+    .map((value) => value.toString())
+    .filter(Boolean);
+  const scheduleDays =
+    scheduleDaysRaw.length > 0
+      ? (weekdaySchema.array().parse(scheduleDaysRaw) as WeekdayValue[])
+      : [...DEFAULT_NOTIFICATION_SETTINGS.scheduleDays];
+
+  const escalationDelayRaw = formData.get("escalationDelayHours")?.toString();
+  const escalationDelayParsed = escalationDelayRaw
+    ? Number(escalationDelayRaw)
+    : DEFAULT_NOTIFICATION_SETTINGS.escalationDelayHours;
+  const escalationDelayHours =
+    Number.isFinite(escalationDelayParsed) && escalationDelayParsed > 0
+      ? Math.min(Math.floor(escalationDelayParsed), 168)
+      : DEFAULT_NOTIFICATION_SETTINGS.escalationDelayHours;
+
+  await prisma.userNotificationSettings.upsert({
+    where: { userId },
+    update: {
+      quietHoursEnabled,
+      quietHoursStartMinutes,
+      quietHoursEndMinutes,
+      scheduleEnabled,
+      scheduleDays,
+      scheduleStartMinutes,
+      scheduleEndMinutes,
+      escalationEnabled,
+      escalationDelayHours,
+    },
+    create: {
+      userId,
+      quietHoursEnabled,
+      quietHoursStartMinutes,
+      quietHoursEndMinutes,
+      scheduleEnabled,
+      scheduleDays,
+      scheduleStartMinutes,
+      scheduleEndMinutes,
+      escalationEnabled,
+      escalationDelayHours,
+    },
+  });
+
+  revalidateApp();
+  revalidatePath("/app/settings");
+}
+
 export async function createTask(formData: FormData) {
   const userId = await requireUser();
   const houseId = z.string().cuid().parse(formData.get("houseId"));
@@ -3959,6 +4053,24 @@ export async function createTask(formData: FormData) {
   const reminderOffsetDays = reminderOffsetDaysRaw
     ? Number(reminderOffsetDaysRaw)
     : null;
+  const notificationBypassQuietHours =
+    formData.get("notificationBypassQuietHours") === "on";
+  const notificationBypassSchedule =
+    formData.get("notificationBypassSchedule") === "on";
+  const escalationMode = optionalString.parse(
+    formData.get("notificationEscalationMode")?.toString()
+  );
+  const notificationEscalationEnabled =
+    escalationMode === "enabled" ? true : escalationMode === "disabled" ? false : null;
+  const escalationDelayRaw = formData.get("notificationEscalationDelayHours")?.toString();
+  const escalationDelayParsed =
+    escalationDelayRaw && Number.isFinite(Number(escalationDelayRaw))
+      ? Number(escalationDelayRaw)
+      : null;
+  const notificationEscalationDelayHours =
+    escalationDelayParsed && escalationDelayParsed > 0
+      ? Math.min(Math.floor(escalationDelayParsed), 168)
+      : null;
 
   const recurrenceUnitRaw = optionalString.parse(
     formData.get("recurrenceUnit")?.toString()
@@ -3998,6 +4110,10 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        notificationBypassQuietHours,
+        notificationBypassSchedule,
+        notificationEscalationEnabled,
+        notificationEscalationDelayHours,
         createdById: userId,
         assigneeId: validAssigneeId,
         zoneId,
@@ -4020,6 +4136,10 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        notificationBypassQuietHours,
+        notificationBypassSchedule,
+        notificationEscalationEnabled,
+        notificationEscalationDelayHours,
         createdById: userId,
         assigneeId: validAssigneeId,
         zoneId,
@@ -4042,6 +4162,18 @@ export async function createTask(formData: FormData) {
       personId,
       assigneeId: validAssigneeId,
     });
+
+    if (validAssigneeId && validAssigneeId !== userId) {
+      await notifyTaskAssigned({
+        houseId,
+        taskId: instance.id,
+        taskTitle: title,
+        assigneeId: validAssigneeId,
+        actorId: userId,
+        bypassQuietHours: notificationBypassQuietHours,
+        bypassSchedule: notificationBypassSchedule,
+      });
+    }
   } else {
     const created = await prisma.task.create({
       data: {
@@ -4053,6 +4185,10 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        notificationBypassQuietHours,
+        notificationBypassSchedule,
+        notificationEscalationEnabled,
+        notificationEscalationDelayHours,
         createdById: userId,
         assigneeId: validAssigneeId,
         zoneId,
@@ -4074,6 +4210,18 @@ export async function createTask(formData: FormData) {
       personId,
       assigneeId: validAssigneeId,
     });
+
+    if (validAssigneeId && validAssigneeId !== userId) {
+      await notifyTaskAssigned({
+        houseId,
+        taskId: created.id,
+        taskTitle: title,
+        assigneeId: validAssigneeId,
+        actorId: userId,
+        bypassQuietHours: notificationBypassQuietHours,
+        bypassSchedule: notificationBypassSchedule,
+      });
+    }
   }
 
   revalidateApp();
@@ -4087,7 +4235,15 @@ export async function updateTaskStatus(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      status: true,
+      createdById: true,
+      assigneeId: true,
+      title: true,
+      notificationBypassQuietHours: true,
+      notificationBypassSchedule: true,
+    },
   });
 
   if (!task) {
@@ -4101,6 +4257,22 @@ export async function updateTaskStatus(formData: FormData) {
     data: { status },
   });
 
+  if (status !== task.status) {
+    const recipientId = task.assigneeId ?? task.createdById;
+    if (recipientId && recipientId !== userId) {
+      await notifyTaskStatusChanged({
+        houseId: task.houseId,
+        taskId,
+        taskTitle: task.title,
+        recipientId,
+        actorId: userId,
+        status,
+        bypassQuietHours: task.notificationBypassQuietHours,
+        bypassSchedule: task.notificationBypassSchedule,
+      });
+    }
+  }
+
   revalidateApp();
 }
 
@@ -4111,7 +4283,13 @@ export async function updateTaskAssignee(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      assigneeId: true,
+      title: true,
+      notificationBypassQuietHours: true,
+      notificationBypassSchedule: true,
+    },
   });
 
   if (!task) {
@@ -4136,6 +4314,18 @@ export async function updateTaskAssignee(formData: FormData) {
     data: { assigneeId },
   });
 
+  if (assigneeId && assigneeId !== userId && assigneeId !== task.assigneeId) {
+    await notifyTaskAssigned({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: task.title,
+      assigneeId,
+      actorId: userId,
+      bypassQuietHours: task.notificationBypassQuietHours,
+      bypassSchedule: task.notificationBypassSchedule,
+    });
+  }
+
   revalidateApp();
 }
 
@@ -4154,6 +4344,11 @@ export async function updateTask(formData: FormData) {
       recurrenceUnit: true,
       recurrenceInterval: true,
       createdById: true,
+      status: true,
+      assigneeId: true,
+      title: true,
+      notificationBypassQuietHours: true,
+      notificationBypassSchedule: true,
       parent: {
         select: {
           id: true,
@@ -4189,6 +4384,24 @@ export async function updateTask(formData: FormData) {
   const recurrenceInterval = recurrenceIntervalRaw
     ? Number(recurrenceIntervalRaw)
     : null;
+  const notificationBypassQuietHours =
+    formData.get("notificationBypassQuietHours") === "on";
+  const notificationBypassSchedule =
+    formData.get("notificationBypassSchedule") === "on";
+  const escalationMode = optionalString.parse(
+    formData.get("notificationEscalationMode")?.toString()
+  );
+  const notificationEscalationEnabled =
+    escalationMode === "enabled" ? true : escalationMode === "disabled" ? false : null;
+  const escalationDelayRaw = formData.get("notificationEscalationDelayHours")?.toString();
+  const escalationDelayParsed =
+    escalationDelayRaw && Number.isFinite(Number(escalationDelayRaw))
+      ? Number(escalationDelayRaw)
+      : null;
+  const notificationEscalationDelayHours =
+    escalationDelayParsed && escalationDelayParsed > 0
+      ? Math.min(Math.floor(escalationDelayParsed), 168)
+      : null;
 
   const zoneId = await resolveRelationId(
     task.houseId,
@@ -4264,6 +4477,10 @@ export async function updateTask(formData: FormData) {
           recurrenceUnit,
           recurrenceInterval: intervalValue,
           reminderOffsetDays: cleanedReminderOffsetDays,
+          notificationBypassQuietHours,
+          notificationBypassSchedule,
+          notificationEscalationEnabled,
+          notificationEscalationDelayHours,
           createdById: seriesTemplate?.createdById ?? userId,
           assigneeId,
           zoneId,
@@ -4277,16 +4494,20 @@ export async function updateTask(formData: FormData) {
       });
 
       if (!task.isTemplate) {
-        await prisma.task.update({
-          where: { id: taskId },
-          data: {
-            title,
-            description,
-            dueDate: normalizedDueDate,
-            reminderOffsetDays: cleanedReminderOffsetDays,
-            zoneId,
-            categoryId,
-            animalId,
+      await prisma.task.update({
+        where: { id: taskId },
+        data: {
+          title,
+          description,
+          dueDate: normalizedDueDate,
+          reminderOffsetDays: cleanedReminderOffsetDays,
+          notificationBypassQuietHours,
+          notificationBypassSchedule,
+          notificationEscalationEnabled,
+          notificationEscalationDelayHours,
+          zoneId,
+          categoryId,
+          animalId,
             personId,
             projectId,
             equipmentId,
@@ -4332,6 +4553,10 @@ export async function updateTask(formData: FormData) {
               recurrenceUnit,
               recurrenceInterval: intervalValue,
               reminderOffsetDays: cleanedReminderOffsetDays,
+              notificationBypassQuietHours,
+              notificationBypassSchedule,
+              notificationEscalationEnabled,
+              notificationEscalationDelayHours,
               createdById: task.createdById ?? userId,
               assigneeId,
               zoneId,
@@ -4352,6 +4577,10 @@ export async function updateTask(formData: FormData) {
           description,
           dueDate: normalizedDueDate,
           reminderOffsetDays: cleanedReminderOffsetDays,
+          notificationBypassQuietHours,
+          notificationBypassSchedule,
+          notificationEscalationEnabled,
+          notificationEscalationDelayHours,
           zoneId,
           categoryId,
           animalId,
@@ -4380,6 +4609,10 @@ export async function updateTask(formData: FormData) {
         description,
         dueDate: resolvedDueDate,
         reminderOffsetDays: cleanedReminderOffsetDays,
+        notificationBypassQuietHours,
+        notificationBypassSchedule,
+        notificationEscalationEnabled,
+        notificationEscalationDelayHours,
         zoneId,
         categoryId,
         animalId,
@@ -4436,6 +4669,10 @@ export async function updateTask(formData: FormData) {
         description,
         dueDate,
         reminderOffsetDays: cleanedReminderOffsetDays,
+        notificationBypassQuietHours,
+        notificationBypassSchedule,
+        notificationEscalationEnabled,
+        notificationEscalationDelayHours,
         zoneId,
         categoryId,
         animalId,
@@ -4447,6 +4684,34 @@ export async function updateTask(formData: FormData) {
         status,
       },
     });
+  }
+
+  if (assigneeId && assigneeId !== userId && assigneeId !== task.assigneeId) {
+    await notifyTaskAssigned({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: title,
+      assigneeId,
+      actorId: userId,
+      bypassQuietHours: notificationBypassQuietHours,
+      bypassSchedule: notificationBypassSchedule,
+    });
+  }
+
+  if (status !== task.status) {
+    const recipientId = assigneeId ?? task.createdById;
+    if (recipientId && recipientId !== userId) {
+      await notifyTaskStatusChanged({
+        houseId: task.houseId,
+        taskId,
+        taskTitle: title,
+        recipientId,
+        actorId: userId,
+        status,
+        bypassQuietHours: notificationBypassQuietHours,
+        bypassSchedule: notificationBypassSchedule,
+      });
+    }
   }
 
   revalidateApp();
@@ -4503,7 +4768,14 @@ export async function addTaskComment(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      title: true,
+      assigneeId: true,
+      createdById: true,
+      notificationBypassQuietHours: true,
+      notificationBypassSchedule: true,
+    },
   });
 
   if (!task) {
@@ -4519,6 +4791,19 @@ export async function addTaskComment(formData: FormData) {
       content,
     },
   });
+
+  const recipientId = task.assigneeId ?? task.createdById;
+  if (recipientId && recipientId !== userId) {
+    await notifyTaskCommented({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: task.title,
+      recipientId,
+      actorId: userId,
+      bypassQuietHours: task.notificationBypassQuietHours,
+      bypassSchedule: task.notificationBypassSchedule,
+    });
+  }
 
   revalidateApp();
   revalidatePath(`/app/tasks/${taskId}`);

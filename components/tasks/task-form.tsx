@@ -268,6 +268,66 @@ export function TaskForm({
           />
         </div>
       </div>
+      <div className="space-y-3 rounded-lg border bg-card p-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Notifications</p>
+          <p className="text-xs text-muted-foreground">
+            Personnalise les règles de notification pour cette tâche si besoin.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="notificationBypassQuietHours"
+            className="h-4 w-4 accent-foreground"
+          />
+          Ignorer les heures calmes
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="notificationBypassSchedule"
+            className="h-4 w-4 accent-foreground"
+          />
+          Ignorer le planning d&apos;envoi
+        </label>
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-1">
+            <label className="text-xs text-muted-foreground" htmlFor="notificationEscalationMode">
+              Escalade
+            </label>
+            <select
+              id="notificationEscalationMode"
+              name="notificationEscalationMode"
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              defaultValue=""
+            >
+              <option value="">Par défaut</option>
+              <option value="enabled">Activée</option>
+              <option value="disabled">Désactivée</option>
+            </select>
+          </div>
+          <div className="grid gap-1">
+            <label
+              className="text-xs text-muted-foreground"
+              htmlFor="notificationEscalationDelayHours"
+            >
+              Délai d&apos;escalade (heures)
+            </label>
+            <Input
+              id="notificationEscalationDelayHours"
+              name="notificationEscalationDelayHours"
+              type="number"
+              min={1}
+              max={168}
+              placeholder="24"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Laisse le délai vide pour utiliser le réglage global.
+        </p>
+      </div>
       <Button type="submit" variant="add" className="rounded-full">
         Créer la tâche
       </Button>
