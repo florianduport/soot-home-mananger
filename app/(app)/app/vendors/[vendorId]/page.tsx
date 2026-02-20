@@ -15,6 +15,7 @@ const documentTypeLabels: Record<string, string> = {
   INVOICE: "Facture",
   QUOTE: "Devis",
   RECEIPT: "Reçu",
+  WARRANTY: "Garantie",
   OTHER: "Document",
 };
 
@@ -169,7 +170,7 @@ export default async function VendorDetailPage({
       <section className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Factures et devis</CardTitle>
+          <CardTitle>Documents</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {vendor.documents.length ? (

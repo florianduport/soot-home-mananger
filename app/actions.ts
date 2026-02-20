@@ -67,7 +67,13 @@ const budgetLabelSchema = z
   .max(200, "Le libellé est trop long");
 const budgetNotesSchema = z.string().trim().max(2000).optional();
 const budgetTypeSchema = z.enum(["INCOME", "EXPENSE"]);
-const budgetDocumentTypeSchema = z.enum(["RECEIPT", "INVOICE", "QUOTE", "OTHER"]);
+const budgetDocumentTypeSchema = z.enum([
+  "RECEIPT",
+  "INVOICE",
+  "QUOTE",
+  "WARRANTY",
+  "OTHER",
+]);
 const importantDateTypeSchema = z.enum([
   "BIRTHDAY",
   "ANNIVERSARY",
@@ -563,6 +569,7 @@ async function resolveRelationId(
     | "person"
     | "project"
     | "equipment"
+    | "task"
     | "vendor",
   id: string | undefined
 ) {
@@ -597,6 +604,13 @@ async function resolveRelationId(
   }
   if (model === "equipment") {
     const record = await prisma.equipment.findFirst({
+      where: { id, houseId },
+      select: { id: true },
+    });
+    return record ? id : null;
+  }
+  if (model === "task") {
+    const record = await prisma.task.findFirst({
       where: { id, houseId },
       select: { id: true },
     });
@@ -724,7 +738,7 @@ const budgetDocumentExtractionSchema = z.object({
     .regex(ISO_DATE_REGEX)
     .optional(),
   isForecast: z.boolean().optional(),
-  documentType: z.enum(["RECEIPT", "INVOICE", "QUOTE", "OTHER"]).optional(),
+  documentType: z.enum(["RECEIPT", "INVOICE", "QUOTE", "WARRANTY", "OTHER"]).optional(),
   supplier: z.string().trim().max(200).optional(),
   notes: z.string().trim().max(1000).optional(),
 });
@@ -1884,6 +1898,7 @@ function revalidateApp() {
   revalidatePath("/app/equipment");
   revalidatePath("/app/calendar");
   revalidatePath("/app/budgets");
+  revalidatePath("/app/documents");
   revalidatePath("/app/shopping-lists");
   revalidatePath("/app/settings");
   revalidatePath("/app/notifications");
@@ -3225,6 +3240,98 @@ export async function uploadBudgetDocumentAndCreateExpense(formData: FormData) {
       });
     })
   );
+
+  revalidateApp();
+}
+
+export async function uploadVaultDocument(formData: FormData) {
+  const userId = await requireUser();
+  const houseId = cuidSchema.parse(formData.get("houseId"));
+  const vendorId = await resolveRelationId(
+    houseId,
+    "vendor",
+    optionalString.parse(formData.get("vendorId")?.toString())
+  );
+  const taskId = await resolveRelationId(
+    houseId,
+    "task",
+    optionalString.parse(formData.get("taskId")?.toString())
+  );
+  const equipmentId = await resolveRelationId(
+    houseId,
+    "equipment",
+    optionalString.parse(formData.get("equipmentId")?.toString())
+  );
+  const documentType = budgetDocumentTypeSchema.parse(
+    formData.get("documentType")?.toString() || "OTHER"
+  ) as BudgetDocumentType;
+  const issuedOnRaw = optionalString.parse(formData.get("issuedOn")?.toString());
+  const warrantyEndsOnRaw = optionalString.parse(
+    formData.get("warrantyEndsOn")?.toString()
+  );
+  const supplier = optionalString.parse(formData.get("supplier")?.toString()) || null;
+  const notes = budgetNotesSchema.parse(formData.get("notes")?.toString());
+  const file = formData.get("document");
+
+  await requireMembership(userId, houseId);
+
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Aucun document sélectionné");
+  }
+
+  const mimeType = file.type || "application/octet-stream";
+  const isAllowed =
+    BUDGET_ALLOWED_MIME_TYPES.has(mimeType) || mimeType.startsWith("image/");
+
+  if (!isAllowed) {
+    throw new Error("Formats autorisés: PDF et images");
+  }
+
+  if (file.size > BUDGET_DOCUMENT_MAX_BYTES) {
+    throw new Error("Le document dépasse 20 Mo");
+  }
+
+  if (issuedOnRaw && !ISO_DATE_REGEX.test(issuedOnRaw)) {
+    throw new Error("La date d'émission doit être au format YYYY-MM-DD");
+  }
+
+  if (warrantyEndsOnRaw && !ISO_DATE_REGEX.test(warrantyEndsOnRaw)) {
+    throw new Error("La date de garantie doit être au format YYYY-MM-DD");
+  }
+
+  const issuedOn = issuedOnRaw ? new Date(`${issuedOnRaw}T12:00:00`) : null;
+  const warrantyEndsOn = warrantyEndsOnRaw
+    ? new Date(`${warrantyEndsOnRaw}T12:00:00`)
+    : null;
+
+  const extension = resolveBudgetDocumentExtension(mimeType);
+  const docsDir = path.join(process.cwd(), "public", "vault-documents", houseId);
+  await mkdir(docsDir, { recursive: true });
+
+  const fileName = `${Date.now()}-${randomBytes(6).toString("hex")}.${extension}`;
+  const absolutePath = path.join(docsDir, fileName);
+  const relativePath = `/vault-documents/${houseId}/${fileName}`;
+  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(absolutePath, fileBuffer);
+
+  await prisma.budgetDocument.create({
+    data: {
+      houseId,
+      uploadedById: userId,
+      vendorId,
+      taskId,
+      equipmentId,
+      name: file.name,
+      mimeType,
+      sizeBytes: file.size,
+      path: relativePath,
+      documentType,
+      issuedOn,
+      warrantyEndsOn,
+      supplier,
+      notes: notes || null,
+    },
+  });
 
   revalidateApp();
 }

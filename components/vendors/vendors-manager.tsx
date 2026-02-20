@@ -211,8 +211,14 @@ function VendorRow({
 
       <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
         <div className="flex flex-wrap gap-3">
-          <span>Tâches liées: {vendor.taskCount}</span>
-          <span>Factures/Devis: {vendor.documentCount}</span>
+          <span>
+            <span>Tâches liées: </span>
+            <span>{vendor.taskCount}</span>
+          </span>
+          <span>
+            <span>Documents: </span>
+            <span>{vendor.documentCount}</span>
+          </span>
           {vendor.rating ? <span>Note: {vendor.rating}/5</span> : null}
         </div>
         <div className="grid gap-1 sm:grid-cols-2">

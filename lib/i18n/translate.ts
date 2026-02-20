@@ -204,6 +204,116 @@ const EXACT_TRANSLATIONS: Record<string, TranslationTarget> = {
   Autre: { en: "Other", es: "Otro" },
   "Repeter chaque annee": { en: "Repeat every year", es: "Repetir cada ano" },
   "Date unique": { en: "One-time date", es: "Fecha unica" },
+  Documents: { en: "Documents", es: "Documentos" },
+  Document: { en: "Document", es: "Documento" },
+  "Documents lies": { en: "Linked documents", es: "Documentos vinculados" },
+  "Documents:": { en: "Documents:", es: "Documentos:" },
+  "Taches liees:": { en: "Linked tasks:", es: "Tareas vinculadas:" },
+  "Garanties & recus": {
+    en: "Warranties & receipts",
+    es: "Garantias y recibos",
+  },
+  "Ajouter un document": {
+    en: "Add a document",
+    es: "Agregar un documento",
+  },
+  Type: { en: "Type", es: "Tipo" },
+  "Date d'emission (optionnel)": {
+    en: "Issue date (optional)",
+    es: "Fecha de emision (opcional)",
+  },
+  "Fin de garantie (optionnel)": {
+    en: "Warranty end (optional)",
+    es: "Fin de garantia (opcional)",
+  },
+  "Fournisseur (optionnel)": {
+    en: "Supplier (optional)",
+    es: "Proveedor (opcional)",
+  },
+  "Prestataire (optionnel)": {
+    en: "Service provider (optional)",
+    es: "Proveedor (opcional)",
+  },
+  "Equipement (optionnel)": {
+    en: "Equipment (optional)",
+    es: "Equipo (opcional)",
+  },
+  "Tache liee (optionnel)": {
+    en: "Linked task (optional)",
+    es: "Tarea vinculada (opcional)",
+  },
+  "Notes (optionnel)": {
+    en: "Notes (optional)",
+    es: "Notas (opcional)",
+  },
+  "PDF ou images jusqu'a 20 Mo.": {
+    en: "PDF or images up to 20 MB.",
+    es: "PDF o imagenes hasta 20 MB.",
+  },
+  "Ajouter au coffre": { en: "Add to vault", es: "Agregar al cofre" },
+  "Recherche rapide": { en: "Quick search", es: "Busqueda rapida" },
+  "Nom, fournisseur, tache, equipement...": {
+    en: "Name, supplier, task, equipment...",
+    es: "Nombre, proveedor, tarea, equipo...",
+  },
+  "Marque, boutique, artisan": {
+    en: "Brand, shop, contractor",
+    es: "Marca, tienda, contratista",
+  },
+  "Filtrer par type": { en: "Filter by type", es: "Filtrar por tipo" },
+  "Tous les types": { en: "All types", es: "Todos los tipos" },
+  Rechercher: { en: "Search", es: "Buscar" },
+  "Reinitialiser": { en: "Reset", es: "Restablecer" },
+  "document affiche": {
+    en: "document displayed",
+    es: "documento mostrado",
+  },
+  "documents affiches": {
+    en: "documents displayed",
+    es: "documentos mostrados",
+  },
+  "Ajoute le": { en: "Added on", es: "Agregado el" },
+  par: { en: "by", es: "por" },
+  "Prestataire:": { en: "Vendor:", es: "Proveedor:" },
+  "Fournisseur:": { en: "Supplier:", es: "Proveedor:" },
+  "Emis le": { en: "Issued on", es: "Emitido el" },
+  "Garantie jusqu'au": { en: "Warranty until", es: "Garantia hasta" },
+  "Equipement:": { en: "Equipment:", es: "Equipo:" },
+  "Tache:": { en: "Task:", es: "Tarea:" },
+  "Aucun document enregistre pour le moment.": {
+    en: "No documents saved yet.",
+    es: "Aun no hay documentos guardados.",
+  },
+  "Date inconnue": { en: "Unknown date", es: "Fecha desconocida" },
+  "Voir le fichier": { en: "View file", es: "Ver archivo" },
+  "Aucun document lie pour le moment.": {
+    en: "No linked documents yet.",
+    es: "Aun no hay documentos vinculados.",
+  },
+  "Aucun document selectionne": {
+    en: "No document selected",
+    es: "Ningun documento seleccionado",
+  },
+  "Formats autorises: PDF et images": {
+    en: "Allowed formats: PDF and images",
+    es: "Formatos permitidos: PDF e imagenes",
+  },
+  "Le document depasse 20 Mo": {
+    en: "The document exceeds 20 MB",
+    es: "El documento supera 20 MB",
+  },
+  "La date d'emission doit etre au format YYYY-MM-DD": {
+    en: "Issue date must be in YYYY-MM-DD format",
+    es: "La fecha de emision debe estar en formato YYYY-MM-DD",
+  },
+  "La date de garantie doit etre au format YYYY-MM-DD": {
+    en: "Warranty date must be in YYYY-MM-DD format",
+    es: "La fecha de garantia debe estar en formato YYYY-MM-DD",
+  },
+  Garantie: { en: "Warranty", es: "Garantia" },
+  Recu: { en: "Receipt", es: "Recibo" },
+  Facture: { en: "Invoice", es: "Factura" },
+  Devis: { en: "Quote", es: "Presupuesto" },
 };
 
 const WORD_TRANSLATIONS: Record<string, TranslationTarget> = {

@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import {
   CalendarDays,
   CheckSquare2,
+  FileText,
   Hammer,
   Handshake,
   Home,
@@ -32,6 +33,7 @@ const primaryNav = [
   { href: "/app/tasks", label: "Tâches", icon: CheckSquare2 },
   { href: "/app/calendar", label: "Calendrier", icon: CalendarDays },
   { href: "/app/budgets", label: "Budgets", icon: Landmark },
+  { href: "/app/documents", label: "Documents", icon: FileText },
   { href: "/app/shopping-lists", label: "Listes d'achats", icon: ShoppingCart },
   { href: "/app/projects", label: "Projets", icon: Hammer },
   { href: "/app/vendors", label: "Prestataires", icon: Handshake },
