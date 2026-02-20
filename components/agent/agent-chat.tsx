@@ -107,6 +107,7 @@ export function AgentChat() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const dragDepthRef = useRef(0);
+  const skipNextMessagesFetchRef = useRef(false);
 
   const activeConversation = useMemo(
     () =>
@@ -202,6 +203,10 @@ export function AgentChat() {
     }
 
     void (async () => {
+      if (skipNextMessagesFetchRef.current) {
+        skipNextMessagesFetchRef.current = false;
+        return;
+      }
       setIsLoadingMessages(true);
       setError(null);
       try {
@@ -240,7 +245,7 @@ export function AgentChat() {
     });
   }
 
-  async function createConversation() {
+  async function createConversation(options?: { preserveMessages?: boolean }) {
     setError(null);
     const payload = await fetchJson<{
       conversation: ConversationSummary;
@@ -252,7 +257,9 @@ export function AgentChat() {
     const created = payload.conversation;
     setConversations((prev) => [created, ...prev]);
     setActiveConversationId(created.id);
-    setMessages([]);
+    if (!options?.preserveMessages) {
+      setMessages([]);
+    }
     return created.id;
   }
 
@@ -408,7 +415,12 @@ export function AgentChat() {
     setMessages((prev) => [...prev, tempUserMessage, pendingAssistantMessage]);
 
     try {
-      const conversationId = activeConversationId || (await createConversation());
+      if (!activeConversationId) {
+        skipNextMessagesFetchRef.current = true;
+      }
+
+      const conversationId =
+        activeConversationId || (await createConversation({ preserveMessages: true }));
 
       const formData = new FormData();
       formData.append("message", value);
@@ -442,6 +454,7 @@ export function AgentChat() {
 
       await reloadConversations(conversationId);
     } catch (sendError) {
+      skipNextMessagesFetchRef.current = false;
       tempUserMessage.attachments.forEach((attachment) => {
         if (attachment.localUrl) {
           URL.revokeObjectURL(attachment.localUrl);
