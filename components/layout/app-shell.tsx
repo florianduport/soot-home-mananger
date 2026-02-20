@@ -232,14 +232,14 @@ export function AppShell({
           </li>
           <li>
             <Link
-              href="/app/settings"
+              href="/app/house"
               className={`flex flex-col items-center gap-1 rounded-lg px-2 py-1 text-[11px] ${
-                pathname.startsWith("/app/settings")
+                pathname.startsWith("/app/house")
                   ? "text-foreground"
                   : "text-muted-foreground"
               }`}
             >
-              <Settings className="h-4 w-4" />
+              <House className="h-4 w-4" />
               Maison
             </Link>
           </li>
