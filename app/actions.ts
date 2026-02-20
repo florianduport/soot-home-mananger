@@ -4226,7 +4226,12 @@ export async function updateTaskAssignee(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      title: true,
+      assigneeId: true,
+      ignoreQuietHours: true,
+    },
   });
 
   if (!task) {
