@@ -33,6 +33,30 @@ const EXACT_TRANSLATIONS: Record<string, TranslationTarget> = {
   Routines: { en: "Routines", es: "Rutinas" },
   "A venir (7 jours)": { en: "Coming up (7 days)", es: "Proximos 7 dias" },
   "Toutes les taches": { en: "All tasks", es: "Todas las tareas" },
+  "Synchroniser mon calendrier": {
+    en: "Sync my calendar",
+    es: "Sincronizar mi calendario",
+  },
+  "Ajoute ce lien iCal dans Google, Apple ou Outlook pour voir les tâches.": {
+    en: "Add this iCal link to Google, Apple, or Outlook to see tasks.",
+    es: "Agrega este enlace iCal en Google, Apple u Outlook para ver las tareas.",
+  },
+  "Ce lien est privé. Partage-le uniquement avec les personnes de ta maison.": {
+    en: "This link is private. Share it only with people in your home.",
+    es: "Este enlace es privado. Compártelo solo con personas de tu hogar.",
+  },
+  "Copier le lien": { en: "Copy link", es: "Copiar enlace" },
+  "Lien copié": { en: "Link copied", es: "Enlace copiado" },
+  "Régénérer le lien": { en: "Regenerate link", es: "Regenerar enlace" },
+  "Lien invalide.": { en: "Invalid link.", es: "Enlace no válido." },
+  "Client désactivé.": { en: "Client disabled.", es: "Cliente desactivado." },
+  "Paramètres invalides.": { en: "Invalid parameters.", es: "Parametros no válidos." },
+  "Erreur serveur.": { en: "Server error.", es: "Error del servidor." },
+  "Impossible de générer un lien de calendrier unique.": {
+    en: "Unable to generate a unique calendar link.",
+    es: "No se pudo generar un enlace de calendario único.",
+  },
+  "Utilisateur introuvable.": { en: "User not found.", es: "Usuario no encontrado." },
   "Une maison calme, une action utile a la fois.": {
     en: "A calm home, one useful action at a time.",
     es: "Un hogar tranquilo, una accion util a la vez.",
