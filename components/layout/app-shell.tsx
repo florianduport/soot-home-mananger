@@ -125,26 +125,28 @@ export function AppShell({
       className={`app-theme-shell min-h-dvh ${hasCustomBackground ? "app-theme-shell--image" : ""}`}
       style={shellStyle}
     >
-      <div className="app-theme-ambient" aria-hidden="true">
-        {sootAmbientOrbs.map((orb) => (
-          <span
-            key={orb.id}
-            className="soot-app-orb"
-            style={
-              {
-                top: orb.top,
-                left: orb.left,
-                width: `${orb.size}px`,
-                height: `${orb.size}px`,
-                opacity: orb.opacity,
-                animationDuration: `${orb.duration}s`,
-                animationDelay: `${orb.delay}s`,
-                "--soot-drift": `${orb.drift}px`,
-              } as CSSProperties
-            }
-          />
-        ))}
-      </div>
+      {!hasCustomBackground && (
+        <div className="app-theme-ambient" aria-hidden="true">
+          {sootAmbientOrbs.map((orb) => (
+            <span
+              key={orb.id}
+              className="soot-app-orb"
+              style={
+                {
+                  top: orb.top,
+                  left: orb.left,
+                  width: `${orb.size}px`,
+                  height: `${orb.size}px`,
+                  opacity: orb.opacity,
+                  animationDuration: `${orb.duration}s`,
+                  animationDelay: `${orb.delay}s`,
+                  "--soot-drift": `${orb.drift}px`,
+                } as CSSProperties
+              }
+            />
+          ))}
+        </div>
+      )}
       <div className="flex min-h-dvh">
         <Sidebar
           houseName={houseName}
