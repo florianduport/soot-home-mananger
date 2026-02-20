@@ -58,11 +58,12 @@ test("notification settings can be updated", async ({ page }) => {
 
     await page.goto("/app/settings");
 
-    const quietHoursToggle = page.getByLabel(/activer les heures silencieuses/i);
-    const escalationToggle = page.getByLabel(/activer l'escalade/i);
-    const quietHoursStart = page.getByLabel(/Début des heures silencieuses/i);
-    const quietHoursEnd = page.getByLabel(/Fin des heures silencieuses/i);
-    const escalationDelay = page.getByLabel(/Délai avant escalade/i);
+    const settingsForm = page.locator('form:has(input[name="quietHoursEnabled"])').first();
+    const quietHoursToggle = settingsForm.locator('input[name="quietHoursEnabled"]');
+    const escalationToggle = settingsForm.locator('input[name="escalationEnabled"]');
+    const quietHoursStart = settingsForm.locator('input[name="quietHoursStart"]');
+    const quietHoursEnd = settingsForm.locator('input[name="quietHoursEnd"]');
+    const escalationDelay = settingsForm.locator('input[name="escalationDelayHours"]');
 
     await quietHoursToggle.check();
     await escalationToggle.check();
@@ -70,7 +71,7 @@ test("notification settings can be updated", async ({ page }) => {
     await quietHoursEnd.fill("06:45");
     await escalationDelay.fill("12");
 
-    await page.getByRole("button", { name: /enregistrer les préférences/i }).click();
+    await settingsForm.getByRole("button", { name: /enregistrer les préférences|save preferences/i }).click();
 
     await page.reload();
 
