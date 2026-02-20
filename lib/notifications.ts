@@ -2,16 +2,30 @@ import { Prisma } from "@prisma/client";
 import { format, isSameDay, startOfDay, subDays } from "date-fns";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl, sendEmail } from "@/lib/email";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type NotificationSettingsData,
+} from "@/lib/notification-settings";
 
 type NotificationOptions = {
   userId: string;
   houseId: string;
-  type: "TASK_ASSIGNED" | "TASK_COMMENTED" | "TASK_STATUS" | "TASK_REMINDER" | "PROJECT_CREATED" | "INVITE_ACCEPTED";
+  taskId?: string | null;
+  type:
+    | "TASK_ASSIGNED"
+    | "TASK_COMMENTED"
+    | "TASK_STATUS"
+    | "TASK_REMINDER"
+    | "TASK_ESCALATION"
+    | "PROJECT_CREATED"
+    | "INVITE_ACCEPTED";
   title: string;
   body?: string | null;
   linkUrl?: string | null;
   dedupeKey?: string | null;
   sendEmail?: boolean;
+  bypassQuietHours?: boolean;
+  bypassSchedule?: boolean;
 };
 
 function isNotificationUnavailableError(error: unknown) {
@@ -19,6 +33,107 @@ function isNotificationUnavailableError(error: unknown) {
     error instanceof Prisma.PrismaClientKnownRequestError &&
     (error.code === "P2021" || error.code === "P2022")
   );
+}
+
+function isNotificationSettingsUnavailableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
+type NotificationSettings = NotificationSettingsData;
+
+function resolveWeekday(date: Date) {
+  const day = date.getDay();
+  if (day === 0) return "SUN";
+  if (day === 1) return "MON";
+  if (day === 2) return "TUE";
+  if (day === 3) return "WED";
+  if (day === 4) return "THU";
+  if (day === 5) return "FRI";
+  return "SAT";
+}
+
+function isWithinWindow(minutes: number, start: number, end: number) {
+  if (start === end) {
+    return true;
+  }
+  if (start < end) {
+    return minutes >= start && minutes < end;
+  }
+  return minutes >= start || minutes < end;
+}
+
+async function getNotificationSettings(userId: string): Promise<NotificationSettings> {
+  try {
+    const settings = await prisma.userNotificationSettings.findUnique({
+      where: { userId },
+      select: {
+        quietHoursEnabled: true,
+        quietHoursStartMinutes: true,
+        quietHoursEndMinutes: true,
+        scheduleEnabled: true,
+        scheduleDays: true,
+        scheduleStartMinutes: true,
+        scheduleEndMinutes: true,
+        escalationEnabled: true,
+        escalationDelayHours: true,
+      },
+    });
+
+    if (!settings) {
+      return DEFAULT_NOTIFICATION_SETTINGS;
+    }
+
+    return {
+      quietHoursEnabled: settings.quietHoursEnabled,
+      quietHoursStartMinutes: settings.quietHoursStartMinutes,
+      quietHoursEndMinutes: settings.quietHoursEndMinutes,
+      scheduleEnabled: settings.scheduleEnabled,
+      scheduleDays:
+        settings.scheduleDays.length > 0
+          ? (settings.scheduleDays as NotificationSettings["scheduleDays"])
+          : DEFAULT_NOTIFICATION_SETTINGS.scheduleDays,
+      scheduleStartMinutes: settings.scheduleStartMinutes,
+      scheduleEndMinutes: settings.scheduleEndMinutes,
+      escalationEnabled: settings.escalationEnabled,
+      escalationDelayHours: settings.escalationDelayHours,
+    };
+  } catch (error) {
+    if (isNotificationSettingsUnavailableError(error)) {
+      return DEFAULT_NOTIFICATION_SETTINGS;
+    }
+    throw error;
+  }
+}
+
+async function shouldSendEmailNow(options: {
+  userId: string;
+  bypassQuietHours?: boolean;
+  bypassSchedule?: boolean;
+}) {
+  const settings = await getNotificationSettings(options.userId);
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const day = resolveWeekday(now);
+
+  if (settings.scheduleEnabled && !options.bypassSchedule) {
+    if (!settings.scheduleDays.includes(day)) {
+      return false;
+    }
+    if (!isWithinWindow(minutes, settings.scheduleStartMinutes, settings.scheduleEndMinutes)) {
+      return false;
+    }
+  }
+
+  if (settings.quietHoursEnabled && !options.bypassQuietHours) {
+    if (isWithinWindow(minutes, settings.quietHoursStartMinutes, settings.quietHoursEndMinutes)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function resolveNotificationUrl(linkUrl?: string | null) {
@@ -102,6 +217,7 @@ export async function createNotification(options: NotificationOptions) {
       data: {
         userId: options.userId,
         houseId: options.houseId,
+        taskId: options.taskId ?? undefined,
         type: options.type,
         title: options.title,
         body: options.body,
@@ -110,7 +226,14 @@ export async function createNotification(options: NotificationOptions) {
       },
     });
 
-    if (options.sendEmail) {
+    if (
+      options.sendEmail &&
+      (await shouldSendEmailNow({
+        userId: options.userId,
+        bypassQuietHours: options.bypassQuietHours,
+        bypassSchedule: options.bypassSchedule,
+      }))
+    ) {
       await maybeSendNotificationEmail(
         notification.id,
         options.userId,
@@ -135,17 +258,22 @@ export async function notifyTaskAssigned(options: {
   taskTitle: string;
   assigneeId: string;
   actorId: string;
+  bypassQuietHours?: boolean;
+  bypassSchedule?: boolean;
 }) {
   if (options.assigneeId === options.actorId) return;
   await createNotification({
     userId: options.assigneeId,
     houseId: options.houseId,
+    taskId: options.taskId,
     type: "TASK_ASSIGNED",
     title: `Nouvelle tâche assignée: ${options.taskTitle}`,
     body: "Tu as une nouvelle tâche à prendre en charge.",
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-assigned:${options.taskId}:${options.assigneeId}`,
     sendEmail: true,
+    bypassQuietHours: options.bypassQuietHours,
+    bypassSchedule: options.bypassSchedule,
   });
 }
 
@@ -155,17 +283,22 @@ export async function notifyTaskCommented(options: {
   taskTitle: string;
   recipientId: string;
   actorId: string;
+  bypassQuietHours?: boolean;
+  bypassSchedule?: boolean;
 }) {
   if (options.recipientId === options.actorId) return;
   await createNotification({
     userId: options.recipientId,
     houseId: options.houseId,
+    taskId: options.taskId,
     type: "TASK_COMMENTED",
     title: `Nouveau commentaire sur "${options.taskTitle}"`,
     body: "Un commentaire vient d'être ajouté.",
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-comment:${options.taskId}:${options.recipientId}:${Date.now()}`,
     sendEmail: true,
+    bypassQuietHours: options.bypassQuietHours,
+    bypassSchedule: options.bypassSchedule,
   });
 }
 
@@ -176,18 +309,23 @@ export async function notifyTaskStatusChanged(options: {
   recipientId: string;
   actorId: string;
   status: "DONE" | "TODO" | "IN_PROGRESS";
+  bypassQuietHours?: boolean;
+  bypassSchedule?: boolean;
 }) {
   if (options.recipientId === options.actorId) return;
   const statusLabel = options.status === "DONE" ? "terminée" : "mise à jour";
   await createNotification({
     userId: options.recipientId,
     houseId: options.houseId,
+    taskId: options.taskId,
     type: "TASK_STATUS",
     title: `Tâche ${statusLabel}: ${options.taskTitle}`,
     body: `La tâche a été marquée comme ${statusLabel}.`,
     linkUrl: `/app/tasks/${options.taskId}`,
     dedupeKey: `task-status:${options.taskId}:${options.recipientId}:${options.status}`,
     sendEmail: true,
+    bypassQuietHours: options.bypassQuietHours,
+    bypassSchedule: options.bypassSchedule,
   });
 }
 
@@ -258,6 +396,8 @@ export async function ensureTaskReminders(houseId: string) {
         reminderOffsetDays: true,
         assigneeId: true,
         createdById: true,
+        notificationBypassQuietHours: true,
+        notificationBypassSchedule: true,
       },
     });
 
@@ -278,12 +418,15 @@ export async function ensureTaskReminders(houseId: string) {
         await createNotification({
           userId: recipientId,
           houseId,
+          taskId: task.id,
           type: "TASK_REMINDER",
           title: `Rappel: ${task.title}`,
           body: `Échéance prévue le ${dateLabel}.`,
           linkUrl: `/app/tasks/${task.id}`,
           dedupeKey,
           sendEmail: true,
+          bypassQuietHours: task.notificationBypassQuietHours,
+          bypassSchedule: task.notificationBypassSchedule,
         });
       })
     );
@@ -303,6 +446,97 @@ export async function getUnreadNotificationCount(userId: string) {
   } catch (error) {
     if (isNotificationUnavailableError(error)) {
       return 0;
+    }
+    throw error;
+  }
+}
+
+export async function ensureTaskEscalations(houseId: string) {
+  try {
+    const house = await prisma.house.findUnique({
+      where: { id: houseId },
+      select: { createdById: true },
+    });
+
+    if (!house) return;
+
+    const tasks = await prisma.task.findMany({
+      where: {
+        houseId,
+        isTemplate: false,
+        status: { not: "DONE" },
+        assigneeId: { not: null },
+      },
+      select: {
+        id: true,
+        title: true,
+        assigneeId: true,
+        createdById: true,
+        notificationEscalationEnabled: true,
+        notificationEscalationDelayHours: true,
+        notificationBypassQuietHours: true,
+        notificationBypassSchedule: true,
+      },
+    });
+
+    const settingsCache = new Map<string, NotificationSettings>();
+
+    await Promise.all(
+      tasks.map(async (task) => {
+        if (!task.assigneeId) return;
+        let settings = settingsCache.get(task.assigneeId);
+        if (!settings) {
+          settings = await getNotificationSettings(task.assigneeId);
+          settingsCache.set(task.assigneeId, settings);
+        }
+        const escalationEnabled =
+          task.notificationEscalationEnabled ?? settings.escalationEnabled;
+        if (!escalationEnabled) return;
+
+        const delayHours =
+          task.notificationEscalationDelayHours ?? settings.escalationDelayHours;
+        if (!Number.isFinite(delayHours) || delayHours <= 0) return;
+
+        const lastNotification = await prisma.notification.findFirst({
+          where: {
+            taskId: task.id,
+            userId: task.assigneeId,
+            type: { in: ["TASK_ASSIGNED", "TASK_REMINDER", "TASK_STATUS"] },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, readAt: true, createdAt: true },
+        });
+
+        if (!lastNotification || lastNotification.readAt) return;
+
+        const elapsedMs = Date.now() - lastNotification.createdAt.getTime();
+        if (elapsedMs < delayHours * 60 * 60 * 1000) return;
+
+        const recipients = new Set<string>([task.createdById, house.createdById]);
+        recipients.delete(task.assigneeId);
+
+        await Promise.all(
+          Array.from(recipients).map((recipientId) =>
+            createNotification({
+              userId: recipientId,
+              houseId,
+              taskId: task.id,
+              type: "TASK_ESCALATION",
+              title: `Escalade: ${task.title}`,
+              body: "La tâche n'a pas été confirmée par la personne assignée.",
+              linkUrl: `/app/tasks/${task.id}`,
+              dedupeKey: `task-escalation:${task.id}:${recipientId}:${lastNotification.id}`,
+              sendEmail: true,
+              bypassQuietHours: task.notificationBypassQuietHours,
+              bypassSchedule: task.notificationBypassSchedule,
+            })
+          )
+        );
+      })
+    );
+  } catch (error) {
+    if (isNotificationUnavailableError(error)) {
+      return;
     }
     throw error;
   }

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/db";
 import { ensureRecurringTasks } from "@/lib/recurrence";
+import { ensureTaskEscalations, ensureTaskReminders } from "@/lib/notifications";
 
 type ShoppingListWithItems = Prisma.ShoppingListGetPayload<{
   include: { items: true };
@@ -53,6 +54,13 @@ function isImportantDateUnavailableError(error: unknown) {
       (error.code === "P2021" || error.code === "P2022")) ||
     (error instanceof TypeError &&
       error.message.toLowerCase().includes("importantdate"))
+  );
+}
+
+function isNotificationSettingsUnavailableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
   );
 }
 
@@ -159,6 +167,19 @@ async function loadPeopleWithAvatarFallback(houseId: string) {
   }
 }
 
+async function loadNotificationSettings(userId: string) {
+  try {
+    return await prisma.userNotificationSettings.findUnique({
+      where: { userId },
+    });
+  } catch (error) {
+    if (isNotificationSettingsUnavailableError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function requireSession() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -240,6 +261,7 @@ export async function getHouseData(userId: string) {
   const houseId = membership.houseId;
 
   await ensureRecurringTasks(houseId);
+  await Promise.all([ensureTaskReminders(houseId), ensureTaskEscalations(houseId)]);
 
   let shoppingListsReady = true;
   let shoppingLists: ShoppingListWithItems[] = [];
@@ -294,6 +316,7 @@ export async function getHouseData(userId: string) {
     invites,
     tasks,
     suggestions,
+    notificationSettings,
   ] = await Promise.all([
     prisma.zone.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
     prisma.category.findMany({ where: { houseId }, orderBy: { name: "asc" } }),
@@ -336,6 +359,7 @@ export async function getHouseData(userId: string) {
         equipment: true,
       },
     }),
+    loadNotificationSettings(userId),
   ]);
 
   return {
@@ -355,5 +379,6 @@ export async function getHouseData(userId: string) {
     tasks,
     suggestions,
     importantDates,
+    notificationSettings,
   };
 }

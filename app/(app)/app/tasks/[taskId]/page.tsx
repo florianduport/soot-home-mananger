@@ -157,6 +157,13 @@ export default async function TaskDetailPage({
   );
 
   const recurrenceSource = task.parent ?? (task.isTemplate ? task : null);
+  const escalationModeValue =
+    task.notificationEscalationEnabled === null ||
+    task.notificationEscalationEnabled === undefined
+      ? ""
+      : task.notificationEscalationEnabled
+        ? "enabled"
+        : "disabled";
   const detailItems = [
     task.description
       ? {
@@ -513,6 +520,61 @@ export default async function TaskDetailPage({
                         imageUrl: person.imageUrl ?? null,
                       }))}
                     />
+                  </div>
+                </div>
+                <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Notifications</p>
+                    <p className="text-xs text-muted-foreground">
+                      Ajuste les règles d&apos;envoi pour cette tâche.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      name="notificationBypassQuietHours"
+                      defaultChecked={task.notificationBypassQuietHours}
+                      className="h-4 w-4 accent-foreground"
+                    />
+                    Ignorer les heures calmes
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      name="notificationBypassSchedule"
+                      defaultChecked={task.notificationBypassSchedule}
+                      className="h-4 w-4 accent-foreground"
+                    />
+                    Ignorer le planning d&apos;envoi
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-xs text-muted-foreground">
+                        Escalade
+                      </label>
+                      <select
+                        name="notificationEscalationMode"
+                        defaultValue={escalationModeValue}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                      >
+                        <option value="">Par défaut</option>
+                        <option value="enabled">Activée</option>
+                        <option value="disabled">Désactivée</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs text-muted-foreground">
+                        Délai d&apos;escalade (heures)
+                      </label>
+                      <Input
+                        type="number"
+                        name="notificationEscalationDelayHours"
+                        min={1}
+                        max={168}
+                        defaultValue={task.notificationEscalationDelayHours ?? ""}
+                        placeholder="24"
+                      />
+                    </div>
                   </div>
                 </div>
                 <Button type="submit" className="w-full">

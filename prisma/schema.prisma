@@ -42,8 +42,19 @@ enum NotificationType {
   TASK_COMMENTED
   TASK_STATUS
   TASK_REMINDER
+  TASK_ESCALATION
   PROJECT_CREATED
   INVITE_ACCEPTED
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
 }
 
 enum AgentMessageRole {
@@ -102,6 +113,7 @@ model User {
   createdBudgetRecurringEntries BudgetRecurringEntry[] @relation("BudgetRecurringCreator")
   uploadedBudgetDocuments BudgetDocument[] @relation("BudgetDocumentUploader")
   notifications  Notification[]
+  notificationSettings UserNotificationSettings?
 }
 
 model Account {
@@ -178,6 +190,7 @@ model Notification {
   id          String           @id @default(cuid())
   userId      String
   houseId     String
+  taskId      String?
   type        NotificationType
   title       String
   body        String?
@@ -189,9 +202,29 @@ model Notification {
 
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   house       House            @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  task        Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt, createdAt])
   @@index([houseId, createdAt])
+  @@index([taskId, createdAt])
+}
+
+model UserNotificationSettings {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  quietHoursEnabled       Boolean  @default(false)
+  quietHoursStartMinutes  Int      @default(1320)
+  quietHoursEndMinutes    Int      @default(420)
+  scheduleEnabled         Boolean  @default(false)
+  scheduleDays            Weekday[] @default([MON, TUE, WED, THU, FRI])
+  scheduleStartMinutes    Int      @default(480)
+  scheduleEndMinutes      Int      @default(1080)
+  escalationEnabled       Boolean  @default(true)
+  escalationDelayHours    Int      @default(24)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model HouseMember {
@@ -445,6 +478,10 @@ model Task {
   personId           String?
   vendorId           String?
   parentId           String?
+  notificationBypassQuietHours Boolean @default(false)
+  notificationBypassSchedule Boolean @default(false)
+  notificationEscalationEnabled Boolean?
+  notificationEscalationDelayHours Int?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -462,6 +499,7 @@ model Task {
   children   Task[]     @relation("TaskParent")
 
   comments   TaskComment[]
+  notifications Notification[]
 }
 
 model Vendor {
