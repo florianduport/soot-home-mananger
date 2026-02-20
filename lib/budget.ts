@@ -76,8 +76,8 @@ export async function withBudgetTablesGuard<T>(action: () => Promise<T>) {
   }
 }
 
-export function formatEuroFromCents(value: number) {
-  return new Intl.NumberFormat("fr-FR", {
+export function formatEuroFromCents(value: number, locale = "fr-FR") {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "EUR",
   }).format(value / 100);
