@@ -31,6 +31,6 @@ test.describe("Public pages", () => {
   test("house settings redirects unauthenticated users", async ({ page }) => {
     await page.goto("/app/house");
 
-    await expect(page).toHaveURL(/\\/login/i);
+    await expect(page).toHaveURL(/\/login/i);
   });
 });
