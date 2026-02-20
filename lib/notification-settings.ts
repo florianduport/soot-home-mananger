@@ -17,7 +17,7 @@ export type NotificationSettingsData = {
   quietHoursStartMinutes: number;
   quietHoursEndMinutes: number;
   scheduleEnabled: boolean;
-  scheduleDays: WeekdayValue[];
+  scheduleDays: readonly WeekdayValue[];
   scheduleStartMinutes: number;
   scheduleEndMinutes: number;
   escalationEnabled: boolean;

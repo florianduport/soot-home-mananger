@@ -4384,6 +4384,24 @@ export async function updateTask(formData: FormData) {
   const recurrenceInterval = recurrenceIntervalRaw
     ? Number(recurrenceIntervalRaw)
     : null;
+  const notificationBypassQuietHours =
+    formData.get("notificationBypassQuietHours") === "on";
+  const notificationBypassSchedule =
+    formData.get("notificationBypassSchedule") === "on";
+  const escalationMode = optionalString.parse(
+    formData.get("notificationEscalationMode")?.toString()
+  );
+  const notificationEscalationEnabled =
+    escalationMode === "enabled" ? true : escalationMode === "disabled" ? false : null;
+  const escalationDelayRaw = formData.get("notificationEscalationDelayHours")?.toString();
+  const escalationDelayParsed =
+    escalationDelayRaw && Number.isFinite(Number(escalationDelayRaw))
+      ? Number(escalationDelayRaw)
+      : null;
+  const notificationEscalationDelayHours =
+    escalationDelayParsed && escalationDelayParsed > 0
+      ? Math.min(Math.floor(escalationDelayParsed), 168)
+      : null;
 
   const zoneId = await resolveRelationId(
     task.houseId,
