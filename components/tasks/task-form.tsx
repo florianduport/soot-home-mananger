@@ -94,6 +94,43 @@ export function TaskForm({
           <Input id="reminderOffsetDays" name="reminderOffsetDays" type="number" min={0} />
         </div>
       </div>
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <p className="text-sm font-medium">Notifications</p>
+        <p className="text-xs text-muted-foreground">
+          Personnalise le comportement des notifications pour cette tâche.
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <label className="flex items-start gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              name="allowDuringQuietHours"
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-foreground"
+            />
+            Autoriser les notifications pendant les heures silencieuses.
+          </label>
+          <label className="flex items-start gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              name="escalationDisabled"
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-foreground"
+            />
+            Désactiver l&apos;escalade pour cette tâche.
+          </label>
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="escalationDelayHours">
+              Délai d&apos;escalade (heures)
+            </label>
+            <Input
+              id="escalationDelayHours"
+              name="escalationDelayHours"
+              type="number"
+              min={1}
+              max={168}
+              placeholder="24"
+            />
+          </div>
+        </div>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="recurrenceUnit">

@@ -27,6 +27,11 @@ import {
   enqueueTaskIllustration,
 } from "@/lib/illustrations";
 import {
+  notifyTaskAssigned,
+  notifyTaskCommented,
+  notifyTaskStatusChanged,
+} from "@/lib/notifications";
+import {
   clearProjectImageGenerating,
   removeStoredProjectImageVariants,
 } from "@/lib/project-images";
@@ -68,6 +73,7 @@ const budgetLabelSchema = z
 const budgetNotesSchema = z.string().trim().max(2000).optional();
 const budgetTypeSchema = z.enum(["INCOME", "EXPENSE"]);
 const budgetDocumentTypeSchema = z.enum(["RECEIPT", "INVOICE", "QUOTE", "OTHER"]);
+const timeSchema = z.string().regex(/^\d{2}:\d{2}$/);
 const importantDateTypeSchema = z.enum([
   "BIRTHDAY",
   "ANNIVERSARY",
@@ -1887,6 +1893,58 @@ function revalidateApp() {
   revalidatePath("/app/shopping-lists");
   revalidatePath("/app/settings");
   revalidatePath("/app/notifications");
+}
+
+export async function updateNotificationPreferences(formData: FormData) {
+  const userId = await requireUser();
+  const houseId = z.string().cuid().parse(formData.get("houseId"));
+
+  await requireMembership(userId, houseId);
+
+  const quietHoursEnabled = formData.get("quietHoursEnabled") === "on";
+  const quietHoursStartRaw = optionalString.parse(
+    formData.get("quietHoursStart")?.toString()
+  );
+  const quietHoursEndRaw = optionalString.parse(
+    formData.get("quietHoursEnd")?.toString()
+  );
+  const quietHoursStart = timeSchema.safeParse(quietHoursStartRaw ?? "").success
+    ? quietHoursStartRaw!
+    : "22:00";
+  const quietHoursEnd = timeSchema.safeParse(quietHoursEndRaw ?? "").success
+    ? quietHoursEndRaw!
+    : "07:00";
+
+  const escalationEnabled = formData.get("escalationEnabled") === "on";
+  const escalationDelayHoursRaw = optionalNumber.parse(
+    formData.get("escalationDelayHours")?.toString()
+  );
+  const escalationDelayHours =
+    Number.isFinite(escalationDelayHoursRaw) && escalationDelayHoursRaw !== undefined
+      ? Math.max(1, Math.min(escalationDelayHoursRaw, 168))
+      : 24;
+
+  await prisma.notificationPreference.upsert({
+    where: { userId_houseId: { userId, houseId } },
+    create: {
+      userId,
+      houseId,
+      quietHoursEnabled,
+      quietHoursStart,
+      quietHoursEnd,
+      escalationEnabled,
+      escalationDelayHours,
+    },
+    update: {
+      quietHoursEnabled,
+      quietHoursStart,
+      quietHoursEnd,
+      escalationEnabled,
+      escalationDelayHours,
+    },
+  });
+
+  revalidatePath("/app/settings");
 }
 
 export async function uploadAppBackground(formData: FormData) {
@@ -3959,6 +4017,15 @@ export async function createTask(formData: FormData) {
   const reminderOffsetDays = reminderOffsetDaysRaw
     ? Number(reminderOffsetDaysRaw)
     : null;
+  const allowDuringQuietHours = formData.get("allowDuringQuietHours") === "on";
+  const escalationDisabled = formData.get("escalationDisabled") === "on";
+  const escalationDelayHoursRaw = optionalNumber.parse(
+    formData.get("escalationDelayHours")?.toString()
+  );
+  const escalationDelayHours =
+    Number.isFinite(escalationDelayHoursRaw) && escalationDelayHoursRaw !== undefined
+      ? escalationDelayHoursRaw
+      : null;
 
   const recurrenceUnitRaw = optionalString.parse(
     formData.get("recurrenceUnit")?.toString()
@@ -3998,8 +4065,12 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        allowDuringQuietHours,
+        escalationDelayHours,
+        escalationDisabled,
         createdById: userId,
         assigneeId: validAssigneeId,
+        assignedAt: validAssigneeId ? new Date() : null,
         zoneId,
         categoryId,
         animalId,
@@ -4020,8 +4091,12 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        allowDuringQuietHours,
+        escalationDelayHours,
+        escalationDisabled,
         createdById: userId,
         assigneeId: validAssigneeId,
+        assignedAt: validAssigneeId ? new Date() : null,
         zoneId,
         categoryId,
         animalId,
@@ -4042,6 +4117,17 @@ export async function createTask(formData: FormData) {
       personId,
       assigneeId: validAssigneeId,
     });
+
+    if (validAssigneeId) {
+      await notifyTaskAssigned({
+        houseId,
+        taskId: instance.id,
+        taskTitle: title,
+        assigneeId: validAssigneeId,
+        actorId: userId,
+        allowDuringQuietHours,
+      });
+    }
   } else {
     const created = await prisma.task.create({
       data: {
@@ -4053,8 +4139,12 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        allowDuringQuietHours,
+        escalationDelayHours,
+        escalationDisabled,
         createdById: userId,
         assigneeId: validAssigneeId,
+        assignedAt: validAssigneeId ? new Date() : null,
         zoneId,
         categoryId,
         animalId,
@@ -4074,6 +4164,17 @@ export async function createTask(formData: FormData) {
       personId,
       assigneeId: validAssigneeId,
     });
+
+    if (validAssigneeId) {
+      await notifyTaskAssigned({
+        houseId,
+        taskId: created.id,
+        taskTitle: title,
+        assigneeId: validAssigneeId,
+        actorId: userId,
+        allowDuringQuietHours,
+      });
+    }
   }
 
   revalidateApp();
@@ -4087,7 +4188,14 @@ export async function updateTaskStatus(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      title: true,
+      status: true,
+      createdById: true,
+      assigneeId: true,
+      allowDuringQuietHours: true,
+    },
   });
 
   if (!task) {
@@ -4101,6 +4209,21 @@ export async function updateTaskStatus(formData: FormData) {
     data: { status },
   });
 
+  if (task.status !== status) {
+    const recipientId = task.createdById;
+    if (recipientId) {
+      await notifyTaskStatusChanged({
+        houseId: task.houseId,
+        taskId,
+        taskTitle: task.title,
+        recipientId,
+        actorId: userId,
+        status,
+        allowDuringQuietHours: task.allowDuringQuietHours,
+      });
+    }
+  }
+
   revalidateApp();
 }
 
@@ -4111,7 +4234,13 @@ export async function updateTaskAssignee(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      title: true,
+      assigneeId: true,
+      assignedAt: true,
+      allowDuringQuietHours: true,
+    },
   });
 
   if (!task) {
@@ -4131,10 +4260,25 @@ export async function updateTaskAssignee(formData: FormData) {
     }
   }
 
+  const assigneeChanged = assigneeId !== task.assigneeId;
   await prisma.task.update({
     where: { id: taskId },
-    data: { assigneeId },
+    data: {
+      assigneeId,
+      assignedAt: assigneeChanged ? (assigneeId ? new Date() : null) : task.assignedAt,
+    },
   });
+
+  if (assigneeId && assigneeChanged) {
+    await notifyTaskAssigned({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: task.title,
+      assigneeId,
+      actorId: userId,
+      allowDuringQuietHours: task.allowDuringQuietHours,
+    });
+  }
 
   revalidateApp();
 }
@@ -4154,6 +4298,8 @@ export async function updateTask(formData: FormData) {
       recurrenceUnit: true,
       recurrenceInterval: true,
       createdById: true,
+      assigneeId: true,
+      assignedAt: true,
       parent: {
         select: {
           id: true,
@@ -4179,6 +4325,15 @@ export async function updateTask(formData: FormData) {
   const reminderOffsetDays = optionalNumber.parse(
     formData.get("reminderOffsetDays")?.toString()
   );
+  const allowDuringQuietHours = formData.get("allowDuringQuietHours") === "on";
+  const escalationDisabled = formData.get("escalationDisabled") === "on";
+  const escalationDelayHoursRaw = optionalNumber.parse(
+    formData.get("escalationDelayHours")?.toString()
+  );
+  const escalationDelayHours =
+    Number.isFinite(escalationDelayHoursRaw) && escalationDelayHoursRaw !== undefined
+      ? escalationDelayHoursRaw
+      : null;
   const recurrenceUnitRaw = optionalString.parse(
     formData.get("recurrenceUnit")?.toString()
   );
@@ -4239,6 +4394,13 @@ export async function updateTask(formData: FormData) {
   const status =
     formData.get("status")?.toString() === "DONE" ? "DONE" : "TODO";
 
+  let assignedAt = task.assignedAt ?? null;
+  if (!assigneeId) {
+    assignedAt = null;
+  } else if (assigneeId !== task.assigneeId) {
+    assignedAt = new Date();
+  }
+
   const cleanedReminderOffsetDays =
     Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== undefined
       ? reminderOffsetDays
@@ -4266,6 +4428,10 @@ export async function updateTask(formData: FormData) {
           reminderOffsetDays: cleanedReminderOffsetDays,
           createdById: seriesTemplate?.createdById ?? userId,
           assigneeId,
+          assignedAt,
+          allowDuringQuietHours,
+          escalationDelayHours,
+          escalationDisabled,
           zoneId,
           categoryId,
           animalId,
@@ -4292,6 +4458,10 @@ export async function updateTask(formData: FormData) {
             equipmentId,
             vendorId,
             assigneeId,
+            assignedAt,
+            allowDuringQuietHours,
+            escalationDelayHours,
+            escalationDisabled,
             status,
             parentId: templateId,
             isTemplate: false,
@@ -4334,6 +4504,10 @@ export async function updateTask(formData: FormData) {
               reminderOffsetDays: cleanedReminderOffsetDays,
               createdById: task.createdById ?? userId,
               assigneeId,
+              assignedAt,
+              allowDuringQuietHours,
+              escalationDelayHours,
+              escalationDisabled,
               zoneId,
               categoryId,
               animalId,
@@ -4350,19 +4524,23 @@ export async function updateTask(formData: FormData) {
         data: {
           title,
           description,
-          dueDate: normalizedDueDate,
-          reminderOffsetDays: cleanedReminderOffsetDays,
-          zoneId,
-          categoryId,
-          animalId,
-          personId,
-          projectId,
-          equipmentId,
-          vendorId,
-          assigneeId,
-          status,
-          parentId: template.id,
-          isTemplate: false,
+        dueDate: normalizedDueDate,
+        reminderOffsetDays: cleanedReminderOffsetDays,
+        zoneId,
+        categoryId,
+        animalId,
+        personId,
+        projectId,
+        equipmentId,
+        vendorId,
+        assigneeId,
+        assignedAt,
+        allowDuringQuietHours,
+        escalationDelayHours,
+        escalationDisabled,
+        status,
+        parentId: template.id,
+        isTemplate: false,
         },
       });
     }
@@ -4388,6 +4566,10 @@ export async function updateTask(formData: FormData) {
         equipmentId,
         vendorId,
         assigneeId,
+        assignedAt,
+        allowDuringQuietHours,
+        escalationDelayHours,
+        escalationDisabled,
         status,
         parentId: null,
         isTemplate: false,
@@ -4444,8 +4626,23 @@ export async function updateTask(formData: FormData) {
         equipmentId,
         vendorId,
         assigneeId,
+        assignedAt,
+        allowDuringQuietHours,
+        escalationDelayHours,
+        escalationDisabled,
         status,
       },
+    });
+  }
+
+  if (assigneeId && assigneeId !== task.assigneeId) {
+    await notifyTaskAssigned({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: title,
+      assigneeId,
+      actorId: userId,
+      allowDuringQuietHours,
     });
   }
 
@@ -4503,7 +4700,13 @@ export async function addTaskComment(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      title: true,
+      createdById: true,
+      assigneeId: true,
+      allowDuringQuietHours: true,
+    },
   });
 
   if (!task) {
@@ -4519,6 +4722,18 @@ export async function addTaskComment(formData: FormData) {
       content,
     },
   });
+
+  const recipientId = task.assigneeId ?? task.createdById;
+  if (recipientId) {
+    await notifyTaskCommented({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: task.title,
+      recipientId,
+      actorId: userId,
+      allowDuringQuietHours: task.allowDuringQuietHours,
+    });
+  }
 
   revalidateApp();
   revalidatePath(`/app/tasks/${taskId}`);
