@@ -269,7 +269,6 @@ model Project {
   house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
   tasks Task[]
   taskSuggestions TaskSuggestion[]
-  documents BudgetDocument[] @relation("EquipmentDocuments")
 }
 
 model Equipment {

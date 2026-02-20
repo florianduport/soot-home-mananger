@@ -114,6 +114,8 @@ export default async function DocumentsPage({
       select: { id: true, name: true },
     }),
   ]);
+  const documentCountLabel =
+    documents.length > 1 ? "documents affichés" : "document affiché";
 
   return (
     <>
@@ -291,8 +293,7 @@ export default async function DocumentsPage({
               </div>
             </form>
             <p>
-              {documents.length} document{documents.length > 1 ? "s" : ""} affiché
-              {documents.length > 1 ? "s" : ""}.
+              {documents.length} {documentCountLabel}.
             </p>
           </CardContent>
         </Card>
@@ -309,10 +310,15 @@ export default async function DocumentsPage({
                       {documentTypeLabels[doc.documentType as DocumentType] ?? "Document"} · {doc.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Ajouté le {formatDateLabel(doc.createdAt) ?? "—"}
-                      {doc.uploadedBy?.name || doc.uploadedBy?.email
-                        ? ` · par ${doc.uploadedBy?.name ?? doc.uploadedBy?.email}`
-                        : ""}
+                      <span>Ajouté le </span>
+                      <span>{formatDateLabel(doc.createdAt) ?? "—"}</span>
+                      {doc.uploadedBy?.name || doc.uploadedBy?.email ? (
+                        <>
+                          <span> · </span>
+                          <span>par </span>
+                          <span>{doc.uploadedBy?.name ?? doc.uploadedBy?.email}</span>
+                        </>
+                      ) : null}
                     </p>
                   </div>
                   {doc.path ? (
@@ -324,19 +330,41 @@ export default async function DocumentsPage({
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                   {doc.vendor?.name ? (
                     <span>
-                      Prestataire: {doc.vendor.name}
-                      {doc.vendor.company ? ` · ${doc.vendor.company}` : ""}
+                      <span>Prestataire: </span>
+                      <span>
+                        {doc.vendor.name}
+                        {doc.vendor.company ? ` · ${doc.vendor.company}` : ""}
+                      </span>
                     </span>
                   ) : null}
-                  {doc.supplier ? <span>Fournisseur: {doc.supplier}</span> : null}
-                  {doc.issuedOn ? <span>Émis le {formatDate(doc.issuedOn)}</span> : null}
-                  {doc.warrantyEndsOn ? (
-                    <span>Garantie jusqu&apos;au {formatDate(doc.warrantyEndsOn)}</span>
+                  {doc.supplier ? (
+                    <span>
+                      <span>Fournisseur: </span>
+                      <span>{doc.supplier}</span>
+                    </span>
                   ) : null}
-                  {doc.equipment?.name ? <span>Équipement: {doc.equipment.name}</span> : null}
+                  {doc.issuedOn ? (
+                    <span>
+                      <span>Émis le </span>
+                      <span>{formatDate(doc.issuedOn)}</span>
+                    </span>
+                  ) : null}
+                  {doc.warrantyEndsOn ? (
+                    <span>
+                      <span>Garantie jusqu&apos;au </span>
+                      <span>{formatDate(doc.warrantyEndsOn)}</span>
+                    </span>
+                  ) : null}
+                  {doc.equipment?.name ? (
+                    <span>
+                      <span>Équipement: </span>
+                      <span>{doc.equipment.name}</span>
+                    </span>
+                  ) : null}
                   {doc.task?.title ? (
                     <span>
-                      Tâche: <Link href={`/app/tasks/${doc.task.id}`} className="hover:underline">
+                      <span>Tâche: </span>
+                      <Link href={`/app/tasks/${doc.task.id}`} className="hover:underline">
                         {doc.task.title}
                       </Link>
                     </span>

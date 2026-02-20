@@ -560,10 +560,21 @@ export default async function TaskDetailPage({
                     {documentTypeLabels[doc.documentType] ?? "Document"} · {doc.name}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {doc.issuedOn ? `Émis le ${formatDate(doc.issuedOn)}` : "Date inconnue"}
-                    {doc.warrantyEndsOn
-                      ? ` · Garantie jusqu'au ${formatDate(doc.warrantyEndsOn)}`
-                      : ""}
+                    {doc.issuedOn ? (
+                      <>
+                        <span>Émis le </span>
+                        <span>{formatDate(doc.issuedOn)}</span>
+                      </>
+                    ) : (
+                      <span>Date inconnue</span>
+                    )}
+                    {doc.warrantyEndsOn ? (
+                      <>
+                        <span> · </span>
+                        <span>Garantie jusqu&apos;au </span>
+                        <span>{formatDate(doc.warrantyEndsOn)}</span>
+                      </>
+                    ) : null}
                   </p>
                 </div>
                 {doc.path ? (
