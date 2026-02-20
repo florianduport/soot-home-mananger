@@ -31,6 +31,7 @@ import {
   removeStoredProjectImageVariants,
 } from "@/lib/project-images";
 import { clearTaskImageGenerating } from "@/lib/task-images";
+import { notifyTaskAssigned } from "@/lib/notifications";
 import { z } from "zod";
 
 const nameSchema = z
@@ -130,6 +131,9 @@ const BUDGET_ALLOWED_MIME_TYPES = new Set([
 const BUDGET_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 const BUDGET_MONTH_REGEX = /^\d{4}-\d{2}$/;
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+const taskEscalationOverrideSchema = z.enum(["DEFAULT", "ENABLED", "DISABLED"]);
+const escalationTargetSchema = z.enum(["OWNER", "CREATOR", "OWNER_AND_CREATOR"]);
 const DEFAULT_ONBOARDING_ZONE_NAMES = ["Intérieur", "Jardin"] as const;
 const DEFAULT_ONBOARDING_CATEGORY_NAMES = [
   "Entretien",
@@ -3910,6 +3914,71 @@ export async function revokeHouseInvite(formData: FormData) {
   revalidateApp();
 }
 
+export async function updateNotificationPreferences(formData: FormData) {
+  const userId = await requireUser();
+  const houseId = z.string().cuid().parse(formData.get("houseId"));
+
+  await requireMembership(userId, houseId);
+
+  const quietHoursEnabled =
+    formData.get("quietHoursEnabled")?.toString() === "on";
+  const quietHoursStartRaw = optionalString.parse(
+    formData.get("quietHoursStart")?.toString()
+  );
+  const quietHoursEndRaw = optionalString.parse(
+    formData.get("quietHoursEnd")?.toString()
+  );
+  const quietHoursStart =
+    quietHoursStartRaw && TIME_REGEX.test(quietHoursStartRaw)
+      ? quietHoursStartRaw
+      : "22:00";
+  const quietHoursEnd =
+    quietHoursEndRaw && TIME_REGEX.test(quietHoursEndRaw)
+      ? quietHoursEndRaw
+      : "07:00";
+
+  const escalationEnabled =
+    formData.get("escalationEnabled")?.toString() === "on";
+  const escalationDelayHoursRaw = optionalNumber.parse(
+    formData.get("escalationDelayHours")?.toString()
+  );
+  const escalationDelayHours =
+    Number.isFinite(escalationDelayHoursRaw) && escalationDelayHoursRaw
+      ? escalationDelayHoursRaw
+      : 24;
+  const escalationTargetRaw = optionalString.parse(
+    formData.get("escalationTarget")?.toString()
+  );
+  const escalationTarget = escalationTargetRaw
+    ? escalationTargetSchema.parse(escalationTargetRaw)
+    : "OWNER";
+
+  await prisma.notificationPreference.upsert({
+    where: { userId_houseId: { userId, houseId } },
+    create: {
+      userId,
+      houseId,
+      quietHoursEnabled,
+      quietHoursStart,
+      quietHoursEnd,
+      escalationEnabled,
+      escalationDelayHours,
+      escalationTarget,
+    },
+    update: {
+      quietHoursEnabled,
+      quietHoursStart,
+      quietHoursEnd,
+      escalationEnabled,
+      escalationDelayHours,
+      escalationTarget,
+    },
+  });
+
+  revalidateApp();
+  revalidatePath("/app/settings");
+}
+
 export async function createTask(formData: FormData) {
   const userId = await requireUser();
   const houseId = z.string().cuid().parse(formData.get("houseId"));
@@ -3959,6 +4028,21 @@ export async function createTask(formData: FormData) {
   const reminderOffsetDays = reminderOffsetDaysRaw
     ? Number(reminderOffsetDaysRaw)
     : null;
+  const ignoreQuietHours =
+    formData.get("ignoreQuietHours")?.toString() === "on";
+  const escalationOverrideRaw = optionalString.parse(
+    formData.get("escalationOverride")?.toString()
+  );
+  const escalationOverride = escalationOverrideRaw
+    ? taskEscalationOverrideSchema.parse(escalationOverrideRaw)
+    : "DEFAULT";
+  const escalationDelayHours = optionalNumber.parse(
+    formData.get("escalationDelayHours")?.toString()
+  );
+  const cleanedEscalationDelayHours =
+    Number.isFinite(escalationDelayHours) && escalationDelayHours && escalationDelayHours > 0
+      ? escalationDelayHours
+      : null;
 
   const recurrenceUnitRaw = optionalString.parse(
     formData.get("recurrenceUnit")?.toString()
@@ -3998,6 +4082,9 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        ignoreQuietHours,
+        escalationOverride,
+        escalationDelayHours: cleanedEscalationDelayHours,
         createdById: userId,
         assigneeId: validAssigneeId,
         zoneId,
@@ -4020,6 +4107,9 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        ignoreQuietHours,
+        escalationOverride,
+        escalationDelayHours: cleanedEscalationDelayHours,
         createdById: userId,
         assigneeId: validAssigneeId,
         zoneId,
@@ -4042,6 +4132,17 @@ export async function createTask(formData: FormData) {
       personId,
       assigneeId: validAssigneeId,
     });
+
+    if (validAssigneeId) {
+      await notifyTaskAssigned({
+        houseId,
+        taskId: instance.id,
+        taskTitle: title,
+        assigneeId: validAssigneeId,
+        actorId: userId,
+        respectQuietHours: !ignoreQuietHours,
+      });
+    }
   } else {
     const created = await prisma.task.create({
       data: {
@@ -4053,6 +4154,9 @@ export async function createTask(formData: FormData) {
           Number.isFinite(reminderOffsetDays) && reminderOffsetDays !== null
             ? reminderOffsetDays
             : null,
+        ignoreQuietHours,
+        escalationOverride,
+        escalationDelayHours: cleanedEscalationDelayHours,
         createdById: userId,
         assigneeId: validAssigneeId,
         zoneId,
@@ -4074,6 +4178,17 @@ export async function createTask(formData: FormData) {
       personId,
       assigneeId: validAssigneeId,
     });
+
+    if (validAssigneeId) {
+      await notifyTaskAssigned({
+        houseId,
+        taskId: created.id,
+        taskTitle: title,
+        assigneeId: validAssigneeId,
+        actorId: userId,
+        respectQuietHours: !ignoreQuietHours,
+      });
+    }
   }
 
   revalidateApp();
@@ -4087,7 +4202,7 @@ export async function updateTaskStatus(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: { houseId: true, title: true, assigneeId: true, ignoreQuietHours: true },
   });
 
   if (!task) {
@@ -4111,7 +4226,12 @@ export async function updateTaskAssignee(formData: FormData) {
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { houseId: true },
+    select: {
+      houseId: true,
+      title: true,
+      assigneeId: true,
+      ignoreQuietHours: true,
+    },
   });
 
   if (!task) {
@@ -4136,6 +4256,17 @@ export async function updateTaskAssignee(formData: FormData) {
     data: { assigneeId },
   });
 
+  if (assigneeId && assigneeId !== task.assigneeId) {
+    await notifyTaskAssigned({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: task.title,
+      assigneeId,
+      actorId: userId,
+      respectQuietHours: !task.ignoreQuietHours,
+    });
+  }
+
   revalidateApp();
 }
 
@@ -4150,6 +4281,7 @@ export async function updateTask(formData: FormData) {
       houseId: true,
       parentId: true,
       isTemplate: true,
+      assigneeId: true,
       dueDate: true,
       recurrenceUnit: true,
       recurrenceInterval: true,
@@ -4179,6 +4311,21 @@ export async function updateTask(formData: FormData) {
   const reminderOffsetDays = optionalNumber.parse(
     formData.get("reminderOffsetDays")?.toString()
   );
+  const ignoreQuietHours =
+    formData.get("ignoreQuietHours")?.toString() === "on";
+  const escalationOverrideRaw = optionalString.parse(
+    formData.get("escalationOverride")?.toString()
+  );
+  const escalationOverride = escalationOverrideRaw
+    ? taskEscalationOverrideSchema.parse(escalationOverrideRaw)
+    : "DEFAULT";
+  const escalationDelayHours = optionalNumber.parse(
+    formData.get("escalationDelayHours")?.toString()
+  );
+  const cleanedEscalationDelayHours =
+    Number.isFinite(escalationDelayHours) && escalationDelayHours && escalationDelayHours > 0
+      ? escalationDelayHours
+      : null;
   const recurrenceUnitRaw = optionalString.parse(
     formData.get("recurrenceUnit")?.toString()
   );
@@ -4264,6 +4411,9 @@ export async function updateTask(formData: FormData) {
           recurrenceUnit,
           recurrenceInterval: intervalValue,
           reminderOffsetDays: cleanedReminderOffsetDays,
+          ignoreQuietHours,
+          escalationOverride,
+          escalationDelayHours: cleanedEscalationDelayHours,
           createdById: seriesTemplate?.createdById ?? userId,
           assigneeId,
           zoneId,
@@ -4295,6 +4445,9 @@ export async function updateTask(formData: FormData) {
             status,
             parentId: templateId,
             isTemplate: false,
+            ignoreQuietHours,
+            escalationOverride,
+            escalationDelayHours: cleanedEscalationDelayHours,
           },
         });
 
@@ -4332,6 +4485,9 @@ export async function updateTask(formData: FormData) {
               recurrenceUnit,
               recurrenceInterval: intervalValue,
               reminderOffsetDays: cleanedReminderOffsetDays,
+              ignoreQuietHours,
+              escalationOverride,
+              escalationDelayHours: cleanedEscalationDelayHours,
               createdById: task.createdById ?? userId,
               assigneeId,
               zoneId,
@@ -4363,6 +4519,9 @@ export async function updateTask(formData: FormData) {
           status,
           parentId: template.id,
           isTemplate: false,
+          ignoreQuietHours,
+          escalationOverride,
+          escalationDelayHours: cleanedEscalationDelayHours,
         },
       });
     }
@@ -4393,6 +4552,9 @@ export async function updateTask(formData: FormData) {
         isTemplate: false,
         recurrenceUnit: null,
         recurrenceInterval: null,
+        ignoreQuietHours,
+        escalationOverride,
+        escalationDelayHours: cleanedEscalationDelayHours,
       },
     });
 
@@ -4445,7 +4607,21 @@ export async function updateTask(formData: FormData) {
         vendorId,
         assigneeId,
         status,
+        ignoreQuietHours,
+        escalationOverride,
+        escalationDelayHours: cleanedEscalationDelayHours,
       },
+    });
+  }
+
+  if (assigneeId && assigneeId !== task.assigneeId) {
+    await notifyTaskAssigned({
+      houseId: task.houseId,
+      taskId,
+      taskTitle: title,
+      assigneeId,
+      actorId: userId,
+      respectQuietHours: !ignoreQuietHours,
     });
   }
 
