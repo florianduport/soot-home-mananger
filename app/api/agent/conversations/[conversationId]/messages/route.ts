@@ -22,7 +22,7 @@ const jsonPayloadSchema = z.object({
 const MAX_ATTACHMENTS = 8;
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const OUT_OF_SCOPE_REPLY =
-  "Je suis Soot, l'assistant de maison et de l'app Soot. Je peux aider sur les tâches, listes d'achats, projets, équipements, budget, zones, personnes/animaux, entretien ou réglages de l'app. Pour le reste, je ne peux pas répondre. Reformule avec un besoin lié à la maison ou à l'application.";
+  "Je suis Soot, votre guide maison pour l'app Soot. Je peux aider sur les tâches, listes d'achats, projets, équipements, budget, zones, personnes/animaux, entretien ou réglages de l'app. Pour le reste, je ne peux pas répondre. Reformule avec un besoin lié à la maison ou à l'application.";
 
 const IN_SCOPE_KEYWORDS = [
   "maison",

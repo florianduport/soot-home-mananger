@@ -58,6 +58,26 @@ const EXACT_TRANSLATIONS: Record<string, TranslationTarget> = {
     en: "Soot orchestrates routines, tasks, calendar and shopping in a warm mobile-first experience. One subscription per home, managed by the primary owner.",
     es: "Soot orquesta rutinas, tareas, calendario y compras en una experiencia mobile-first calida. Una suscripcion por hogar, gestionada por el propietario principal.",
   },
+  "Ouvrir Soot": { en: "Open Soot", es: "Abrir Soot" },
+  "Historique Soot": { en: "Soot history", es: "Historial de Soot" },
+  Soot: { en: "Soot", es: "Soot" },
+  "Soot vous aide à organiser la maison, avec un ton chaleureux et concret.": {
+    en: "Soot helps you organize your home with a warm, practical tone.",
+    es: "Soot te ayuda a organizar tu hogar con un tono calido y concreto.",
+  },
+  "Commencez une conversation avec Soot.": {
+    en: "Start a conversation with Soot.",
+    es: "Empieza una conversacion con Soot.",
+  },
+  "Guide de ton Soot": { en: "Soot tone guide", es: "Guia de tono de Soot" },
+  "Style: chaleureux, clair, concret, orienté action.": {
+    en: "Style: warm, clear, concrete, action-oriented.",
+    es: "Estilo: calido, claro, concreto, orientado a la accion.",
+  },
+  'Exemples: "Salut Soot, planifie mon ménage" ou "Soot, ajoute une tâche".': {
+    en: 'Examples: "Hi Soot, plan my cleaning" or "Soot, add a task".',
+    es: 'Ejemplos: "Hola Soot, planifica mi limpieza" o "Soot, agrega una tarea".',
+  },
   "Creer mon foyer": { en: "Create my home", es: "Crear mi hogar" },
   "Voir le parcours 5 min": { en: "See the 5-minute flow", es: "Ver el recorrido de 5 min" },
   "Soot Guide": { en: "Soot Guide", es: "Guia Soot" },
