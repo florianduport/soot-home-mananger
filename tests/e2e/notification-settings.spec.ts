@@ -71,7 +71,7 @@ test("notification settings can be updated", async ({ page }) => {
     await quietHoursEnd.fill("06:45");
     await escalationDelay.fill("12");
 
-    await settingsForm.getByRole("button", { name: /enregistrer les préférences|save preferences/i }).click();
+    await settingsForm.locator('button[type="submit"]').click();
 
     await page.reload();
 

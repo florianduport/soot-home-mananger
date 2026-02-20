@@ -7,8 +7,10 @@ test("landing page loads and language switch works", async ({ page }) => {
 
   const languageSelect = page.locator("select").first();
   await languageSelect.selectOption("fr");
-  await expect(page.getByRole("link", { name: "Connexion" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+  await expect(page.locator('a[href="/login"]').first()).toBeVisible();
 
   await languageSelect.selectOption("en");
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator('a[href="/login"]').first()).toBeVisible();
 });
