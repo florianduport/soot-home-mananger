@@ -4,6 +4,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/email";
 import { buildImportantDateOccurrences } from "@/lib/important-dates";
+import { getServerLanguage } from "@/lib/i18n/server";
+import { translateText } from "@/lib/i18n/translate";
 import {
   escapeIcsText,
   formatIcsDate,
@@ -103,6 +105,9 @@ function buildCalendarIcs({
 }
 
 export async function GET(request: Request) {
+  const language = await getServerLanguage();
+  const t = (value: string) => translateText(value, language);
+
   try {
     const url = new URL(request.url);
     const parsedQuery = querySchema.parse({
@@ -124,11 +129,11 @@ export async function GET(request: Request) {
 
     const membership = user?.memberships[0];
     if (!user || !membership) {
-      return NextResponse.json({ error: "Lien invalide." }, { status: 404 });
+      return NextResponse.json({ error: t("Lien invalide.") }, { status: 404 });
     }
 
     if (membership.house.clientStatus === "INACTIVE") {
-      return NextResponse.json({ error: "Client désactivé." }, { status: 403 });
+      return NextResponse.json({ error: t("Client désactivé.") }, { status: 403 });
     }
 
     const tasks = await prisma.task.findMany({
@@ -190,12 +195,12 @@ export async function GET(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.issues[0]?.message ?? "Paramètres invalides." },
+        { error: t("Paramètres invalides.") },
         { status: 400 }
       );
     }
 
     const message = error instanceof Error ? error.message : "Erreur serveur.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: t(message) }, { status: 500 });
   }
 }

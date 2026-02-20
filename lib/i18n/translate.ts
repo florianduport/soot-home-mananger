@@ -48,6 +48,15 @@ const EXACT_TRANSLATIONS: Record<string, TranslationTarget> = {
   "Copier le lien": { en: "Copy link", es: "Copiar enlace" },
   "Lien copié": { en: "Link copied", es: "Enlace copiado" },
   "Régénérer le lien": { en: "Regenerate link", es: "Regenerar enlace" },
+  "Lien invalide.": { en: "Invalid link.", es: "Enlace no válido." },
+  "Client désactivé.": { en: "Client disabled.", es: "Cliente desactivado." },
+  "Paramètres invalides.": { en: "Invalid parameters.", es: "Parametros no válidos." },
+  "Erreur serveur.": { en: "Server error.", es: "Error del servidor." },
+  "Impossible de générer un lien de calendrier unique.": {
+    en: "Unable to generate a unique calendar link.",
+    es: "No se pudo generar un enlace de calendario único.",
+  },
+  "Utilisateur introuvable.": { en: "User not found.", es: "Usuario no encontrado." },
   "Une maison calme, une action utile a la fois.": {
     en: "A calm home, one useful action at a time.",
     es: "Un hogar tranquilo, una accion util a la vez.",
