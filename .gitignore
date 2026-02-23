@@ -42,3 +42,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# User and app uploads (generated at runtime, do not commit)
+/public/user-avatars/
+/public/app-backgrounds/
+/public/house-icons/
+/public/animal-avatars/
+/public/person-avatars/
+/public/task-images/
+/public/project-images/
+/public/equipment-images/
+/public/budget-documents/
+/public/agent-uploads/
