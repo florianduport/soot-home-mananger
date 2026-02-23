@@ -14,6 +14,7 @@ import { access, mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { authOptions } from "@/auth";
 import { getBudgetRuntimeDelegates, withBudgetTablesGuard } from "@/lib/budget";
+import { regenerateCalendarFeedToken as regenerateCalendarFeedTokenForUser } from "@/lib/calendar-feed";
 import { prisma } from "@/lib/db";
 import {
   clearEquipmentImageGenerating,
@@ -1884,6 +1885,12 @@ export async function uploadEquipmentImage(formData: FormData) {
 
   revalidateApp();
   revalidatePath("/app/equipment");
+}
+
+export async function regenerateCalendarFeedToken() {
+  const userId = await requireUser();
+  await regenerateCalendarFeedTokenForUser(userId);
+  revalidatePath("/app/calendar");
 }
 
 function revalidateApp() {
